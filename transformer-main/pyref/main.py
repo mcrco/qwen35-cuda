@@ -1,31 +1,92 @@
-from qwen2 import Qwen2Model
-import torch
+import argparse
 import os
 from pathlib import Path
+
+import torch
 from transformers import AutoTokenizer
 
+from qwen35 import Qwen35Model
+
+
+DEFAULT_MODEL_ID = "Qwen/Qwen3.5-4B"
+DEFAULT_CACHE_SNAPSHOT = (
+    Path.home()
+    / ".cache/huggingface/hub/models--Qwen--Qwen3.5-4B/snapshots"
+    / "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+)
+
+
+def resolve_model_dir(model_dir_arg: str | None) -> Path:
+    model_dir = (
+        model_dir_arg
+        or os.getenv("TRANSFORMER_MODEL_DIR")
+        or os.getenv("QWEN35_MODEL_DIR")
+    )
+    if model_dir is not None:
+        return Path(model_dir).expanduser()
+    return DEFAULT_CACHE_SNAPSHOT
+
+
+def parse_dtype(dtype_name: str) -> torch.dtype:
+    if dtype_name == "float32":
+        return torch.float32
+    if dtype_name == "float16":
+        return torch.float16
+    if dtype_name == "bfloat16":
+        return torch.bfloat16
+    raise ValueError(f"unsupported dtype {dtype_name!r}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model-dir", help="Local Qwen3.5 checkpoint directory.")
+    parser.add_argument(
+        "--tokenizer",
+        default=os.getenv("QWEN35_TOKENIZER"),
+        help="Tokenizer path or Hugging Face model id.",
+    )
+    parser.add_argument("--prompt", default="a")
+    parser.add_argument("--max-new-tokens", type=int, default=100)
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument(
+        "--dtype",
+        choices=("float32", "float16", "bfloat16"),
+        default=os.getenv("QWEN35_DTYPE") or "bfloat16",
+    )
+    return parser.parse_args()
+
+
 def main():
-    # ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/7ae557604adf67be50417f59c2c2f167def9a775
-    model_dir = Path(os.getenv("TRANSFORMER_MODEL_DIR") or "/cs179/Qwen2.5-0.5B-Instruct")
-    model = Qwen2Model(model_dir)
+    args = parse_args()
+    model_dir = resolve_model_dir(args.model_dir)
+    if not model_dir.exists():
+        raise FileNotFoundError(
+            f"model directory does not exist: {model_dir}. "
+            "Set TRANSFORMER_MODEL_DIR or pass --model-dir."
+        )
 
-    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    dtype = parse_dtype(args.dtype)
+    model = Qwen35Model(model_dir, dtype=dtype)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer or model_dir)
 
-    # autoregressively generate 100 tokens
-    max_seq_len = 100
-    latest_token = 64  # sequence begins with "a" token
+    input_ids = tokenizer.encode(args.prompt, add_special_tokens=False)
+    if not input_ids:
+        raise ValueError("prompt must encode to at least one token")
 
-    k_cache = torch.zeros((max_seq_len, model.config.num_layers, model.config.keys_size()))
-    v_cache = torch.zeros((max_seq_len, model.config.num_layers, model.config.values_size()))
+    max_seq_len = len(input_ids) + args.max_new_tokens
+    cache = model.allocate_cache(max_seq_len, dtype=dtype)
 
-    for i in range(max_seq_len):
-        seq_len = i + 1
-        keys_seq = k_cache[:seq_len, :]
-        values_seq = v_cache[:seq_len, :]
-        new_token = model.forward(keys_seq, values_seq, latest_token, 0.0)
-        print(tokenizer.decode([new_token]), end='', flush=True)
+    for token_id in input_ids[:-1]:
+        model.forward(cache, token_id, 0.0)
+
+    print(args.prompt, end="", flush=True)
+    latest_token = input_ids[-1]
+    for _ in range(args.max_new_tokens):
+        new_token = model.forward(cache, latest_token, args.temperature)
+        print(tokenizer.decode([new_token]), end="", flush=True)
         latest_token = new_token
+    print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

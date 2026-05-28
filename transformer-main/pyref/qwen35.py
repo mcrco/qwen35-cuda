@@ -172,6 +172,11 @@ class TensorLoader:
             return None
         return self.get_tensor(name, dtype)
 
+    def get_concat_tensor(
+        self, names: list[str], dtype: torch.dtype, dim: int = 0
+    ) -> torch.Tensor:
+        return torch.cat([self.get_tensor(name, dtype) for name in names], dim=dim)
+
 
 @dataclass
 class Qwen35FullAttnLayer:
@@ -287,13 +292,14 @@ class Qwen35FullAttnLayer:
 class Qwen35LinearAttentionLayer:
     config: Qwen35Config
     layer_num: int
-    layer_type: str
 
-    input_layernorm: torch.Tensor  # (hidden_size,)
-    post_attention_layernorm: torch.Tensor  # (hidden_size,)
+    input_layernorm: torch.Tensor
+    post_attention_layernorm: torch.Tensor
 
-    in_proj_qkvz_weight: torch.Tensor
-    in_proj_ba_weight: torch.Tensor
+    in_proj_qkv_weight: torch.Tensor
+    in_proj_z_weight: torch.Tensor
+    in_proj_b_weight: torch.Tensor
+    in_proj_a_weight: torch.Tensor
     conv1d_weight: torch.Tensor
     conv1d_bias: torch.Tensor
     dt_bias: torch.Tensor
@@ -316,29 +322,32 @@ class Qwen35LinearAttentionLayer:
             self.input_layernorm, hidden_state, self.config.rms_norm_eps
         )
 
-        # get query, key, value, gate for current token.
-        # group size here is inverted compared to GQA: now there are multiple
-        # value heads per qk head.
+        # for linear attention, there are multiple value heads per qk instead of multiple q per kv.
         group_size = (
             self.config.linear_num_value_heads // self.config.linear_num_key_heads
         )
-        # one projection matrix for all vectors.
-        qkvg = self.in_proj_qkvz_weight @ hidden_state_normed
-        qkvg = qkvg.view(
-            self.config.linear_num_key_heads,
-            2 * self.config.linear_key_head_dim
-            + 2 * group_size * self.config.linear_value_head_dim,
-        )
-        # split into desired vectors.
-        queries, keys, values, gates = torch.split(
-            qkvg,
+
+        # compute linear projections of input.
+        # qkv projection is merged in single matrix.
+        qkv = self.in_proj_qkv_weight @ hidden_state_normed
+        gates = self.in_proj_z_weight @ hidden_state_normed
+        beta_raw = self.in_proj_b_weight @ hidden_state_normed
+        decay_raw = self.in_proj_a_weight @ hidden_state_normed
+
+        # split qkv into individual tensors.
+        queries, keys, values = torch.split(
+            qkv,
             [
-                self.config.linear_key_head_dim,
-                self.config.linear_key_head_dim,
-                group_size * self.config.linear_value_head_dim,
-                group_size * self.config.linear_value_head_dim,
+                self.config.linear_keys_size(),
+                self.config.linear_keys_size(),
+                self.config.linear_values_size(),
             ],
-            dim=-1,
+        )
+        queries = queries.view(
+            (self.config.linear_num_key_heads, self.config.linear_key_head_dim)
+        )
+        keys = keys.view(
+            (self.config.linear_num_key_heads, self.config.linear_key_head_dim)
         )
         values = values.reshape(
             (self.config.linear_num_value_heads, self.config.linear_value_head_dim)
@@ -347,10 +356,6 @@ class Qwen35LinearAttentionLayer:
             (self.config.linear_num_value_heads, self.config.linear_value_head_dim)
         )
 
-        # compute beta and decay (recurrent state update coefficients)
-        ba = self.in_proj_ba_weight @ hidden_state_normed
-        ba = ba.view((self.config.linear_num_key_heads, 2 * group_size))
-        beta_raw, decay_raw = torch.split(ba, [group_size, group_size], dim=-1)
         beta = torch.sigmoid(beta_raw.reshape((self.config.linear_num_value_heads,)))
         decay = -self.A_log.float().exp() * F.softplus(
             decay_raw.reshape((self.config.linear_num_value_heads,)).float()
@@ -438,8 +443,7 @@ class Qwen35LinearAttentionLayer:
         )
         # FFN
         ffn_output = self.down_proj_weight @ (
-            silu(self.gate_proj_weight @ ffn_input)
-            * (self.up_proj_weight @ ffn_input)
+            silu(self.gate_proj_weight @ ffn_input) * (self.up_proj_weight @ ffn_input)
         )
 
         # residual connection
@@ -461,6 +465,7 @@ class Qwen35Model:
     def __init__(self, model_dir: Path, dtype: torch.dtype = torch.float32):
         with open(model_dir / "config.json", "r") as f:
             config_obj = json.load(f)
+        config_obj = config_obj.get("text_config", config_obj)
 
         head_size = config_obj.get(
             "head_dim", config_obj["hidden_size"] // config_obj["num_attention_heads"]
@@ -497,11 +502,18 @@ class Qwen35Model:
         )
 
         tensors = TensorLoader(model_dir)
-        self.embedding_weight = tensors.get_tensor("model.embed_tokens.weight", dtype)
+        tensor_prefix = (
+            "model.language_model"
+            if "model.language_model.embed_tokens.weight" in tensors.tensor_to_file
+            else "model"
+        )
+        self.embedding_weight = tensors.get_tensor(
+            f"{tensor_prefix}.embed_tokens.weight", dtype
+        )
         self.layers = []
         for i in range(self.config.num_layers):
             layer_type = self.config.layer_types[i]
-            prefix = f"model.layers.{i}"
+            prefix = f"{tensor_prefix}.layers.{i}"
 
             input_layernorm = tensors.get_tensor(
                 f"{prefix}.input_layernorm.weight", dtype
@@ -560,19 +572,52 @@ class Qwen35Model:
                     )
                 )
             elif layer_type == "linear_attention":
+                if (
+                    f"{prefix}.linear_attn.in_proj_qkvz.weight"
+                    in tensors.tensor_to_file
+                ):
+                    in_proj_qkvz_weight = tensors.get_tensor(
+                        f"{prefix}.linear_attn.in_proj_qkvz.weight", dtype
+                    )
+                    qkv_size = (
+                        self.config.linear_keys_size() * 2
+                        + self.config.linear_values_size()
+                    )
+                    in_proj_qkv_weight = in_proj_qkvz_weight[:qkv_size]
+                    in_proj_z_weight = in_proj_qkvz_weight[qkv_size:]
+                else:
+                    in_proj_qkv_weight = tensors.get_tensor(
+                        f"{prefix}.linear_attn.in_proj_qkv.weight", dtype
+                    )
+                    in_proj_z_weight = tensors.get_tensor(
+                        f"{prefix}.linear_attn.in_proj_z.weight", dtype
+                    )
+
+                if f"{prefix}.linear_attn.in_proj_ba.weight" in tensors.tensor_to_file:
+                    in_proj_ba_weight = tensors.get_tensor(
+                        f"{prefix}.linear_attn.in_proj_ba.weight", dtype
+                    )
+                    split = self.config.linear_num_value_heads
+                    in_proj_b_weight = in_proj_ba_weight[:split]
+                    in_proj_a_weight = in_proj_ba_weight[split:]
+                else:
+                    in_proj_b_weight = tensors.get_tensor(
+                        f"{prefix}.linear_attn.in_proj_b.weight", dtype
+                    )
+                    in_proj_a_weight = tensors.get_tensor(
+                        f"{prefix}.linear_attn.in_proj_a.weight", dtype
+                    )
+
                 self.layers.append(
                     Qwen35LinearAttentionLayer(
                         config=self.config,
                         layer_num=i,
-                        layer_type=layer_type,
                         input_layernorm=input_layernorm,
                         post_attention_layernorm=post_attention_layernorm,
-                        in_proj_qkvz_weight=tensors.get_tensor(
-                            f"{prefix}.linear_attn.in_proj_qkvz.weight", dtype
-                        ),
-                        in_proj_ba_weight=tensors.get_tensor(
-                            f"{prefix}.linear_attn.in_proj_ba.weight", dtype
-                        ),
+                        in_proj_qkv_weight=in_proj_qkv_weight,
+                        in_proj_z_weight=in_proj_z_weight,
+                        in_proj_b_weight=in_proj_b_weight,
+                        in_proj_a_weight=in_proj_a_weight,
                         conv1d_weight=tensors.get_tensor(
                             f"{prefix}.linear_attn.conv1d.weight", dtype
                         ),
@@ -600,7 +645,7 @@ class Qwen35Model:
             else:
                 raise ValueError(f"unsupported layer type {layer_type!r}")
 
-        self.final_layernorm = tensors.get_tensor("model.norm.weight", dtype)
+        self.final_layernorm = tensors.get_tensor(f"{tensor_prefix}.norm.weight", dtype)
         if (
             self.config.embedding_tying
             or "lm_head.weight" not in tensors.tensor_to_file
