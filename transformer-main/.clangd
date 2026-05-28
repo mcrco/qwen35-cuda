@@ -1,0 +1,33 @@
+# compile_commands uses nvcc; clangd must query nvcc/c++ for include paths.
+# Put on the clangd CLI (Zed: ~/.config/zed/settings.json):
+#   "clangd": { "binary": { "arguments": [
+#     "--query-driver=/usr/local/cuda*/bin/nvcc,/usr/bin/c++,/usr/bin/g++"
+#   ]}}
+# Without /usr/bin/c++ in --query-driver, BuiltinHeaders: QueryDriver cannot
+# learn libstdc++ paths and you get bogus errors (e.g. std::make_shared).
+
+---
+CompileFlags:
+    CompilationDatabase: build
+    Remove:
+        - -forward-unknown-to-host-compiler
+        - "--options-file"
+        - "CMakeFiles*"
+        - "-arch=*"
+        - -arch=native
+        - --expt-relaxed-constexpr
+        - --generate-line-info
+---
+If:
+    PathMatch: .*\.(cu|cuh)$
+CompileFlags:
+    # Same driver as compile_commands.json for host .cpp files
+    Compiler: /usr/bin/c++
+    # Use libstdc++ headers from c++ (see --query-driver above), not clangd builtins
+    BuiltinHeaders: QueryDriver
+    Add:
+        - -std=gnu++20
+        - --cuda-path=/usr/local/cuda
+        - --cuda-gpu-arch=sm_86
+        - -isystem
+        - /usr/local/cuda/targets/x86_64-linux/include
