@@ -25,6 +25,31 @@ add_library(transformer_lib
         src/qwen2/Qwen2Model.cuh
         src/qwen2/Qwen2Loader.h
         src/qwen2/Qwen2Loader.cu
+        src/qwen35/Qwen35Config.h
+        src/qwen35/Qwen35Types.cuh
+        src/cpu_ops/BufferOps.cuh
+        src/cpu_ops/BufferOps.cu
+        src/cpu_ops/Qwen35LayerNorm.cuh
+        src/cpu_ops/Qwen35LayerNorm.cu
+        src/cpu_ops/Qwen35Math.cuh
+        src/cpu_ops/Qwen35MatrixVectorMultiply.cuh
+        src/cpu_ops/Qwen35MatrixVectorMultiply.cu
+        src/cpu_ops/Qwen35SiLUMult.cuh
+        src/cpu_ops/Qwen35SiLUMult.cu
+        src/cpu_ops/Qwen35RoPE.cuh
+        src/cpu_ops/Qwen35RoPE.cu
+        src/cpu_ops/Qwen35GroupQueryAttention.cuh
+        src/cpu_ops/Qwen35GroupQueryAttention.cu
+        src/cpu_ops/Qwen35LinearAttention.cuh
+        src/cpu_ops/Qwen35LinearAttention.cu
+        src/cpu_ops/Qwen35Sampling.cuh
+        src/cpu_ops/Qwen35Sampling.cu
+        src/qwen35/Qwen35Layer.cuh
+        src/qwen35/Qwen35Layer.cu
+        src/qwen35/Qwen35Model.cuh
+        src/qwen35/Qwen35Model.cu
+        src/qwen35/Qwen35Loader.h
+        src/qwen35/Qwen35Loader.cu
         src/HostBuffer.cpp
         src/HostBuffer.h
         src/BPE.cpp
