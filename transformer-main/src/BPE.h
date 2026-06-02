@@ -18,8 +18,12 @@ public:
     std::map<std::string, uint32_t> special_tokens;
     // map utf8 byte -> token ID number (subset of inverse_vocab, but only single bytes)
     std::map<char, uint32_t> inverse_vocab_char;
-    // (vocab["a"], vocab["b"]) -> vocab["ab"]
-    std::map<std::pair<uint32_t, uint32_t>, uint32_t> merges;
+    struct Merge {
+        uint32_t rank;
+        uint32_t token_id;
+    };
+    // (vocab["a"], vocab["b"]) -> merge rank and vocab["ab"]
+    std::map<std::pair<uint32_t, uint32_t>, Merge> merges;
 
     explicit BPE(const std::string &model_dir);
     [[nodiscard]] std::vector<uint32_t> encode(const std::string &str) const;

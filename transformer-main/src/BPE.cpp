@@ -3,6 +3,7 @@
 #include "vendor/json.hpp"
 #include <fstream>
 #include <set>
+#include <stdexcept>
 
 
 std::string fix_encoding(const std::string &str) {
@@ -26,7 +27,11 @@ std::string fix_encoding(const std::string &str) {
 }
 
 BPE::BPE(const std::string &model_dir) {
-    std::ifstream file(model_dir + "/tokenizer.json");
+    const std::string tokenizer_path = model_dir + "/tokenizer.json";
+    std::ifstream file(tokenizer_path);
+    if (!file.good()) {
+        throw std::runtime_error("failed to open " + tokenizer_path);
+    }
     nlohmann::json conf = nlohmann::json::parse(file);
     this->vocab.resize(conf["model"]["vocab"].size() + conf["added_tokens"].size());
     for (auto &[str, idx] : conf["model"]["vocab"].items()) {
@@ -45,14 +50,25 @@ BPE::BPE(const std::string &model_dir) {
             this->inverse_vocab_char[str[0]] = i;
         }
     }
+    uint32_t merge_rank = 0;
     for (auto &merge: conf["model"]["merges"]) {
-        // merge: "a b", convert to numeric IDs
-        std::string merge_str = merge;
-        size_t space = merge_str.find(' ');
-        std::string a = fix_encoding(merge_str.substr(0, space));
-        std::string b = fix_encoding(merge_str.substr(space + 1));
+        std::string a_str;
+        std::string b_str;
+        if (merge.is_array()) {
+            a_str = merge.at(0);
+            b_str = merge.at(1);
+        } else {
+            // merge: "a b"
+            std::string merge_str = merge;
+            size_t space = merge_str.find(' ');
+            a_str = merge_str.substr(0, space);
+            b_str = merge_str.substr(space + 1);
+        }
+        std::string a = fix_encoding(a_str);
+        std::string b = fix_encoding(b_str);
         auto pair = std::make_pair(this->inverse_vocab.at(a), this->inverse_vocab.at(b));
-        this->merges[pair] = this->inverse_vocab[a + b];
+        this->merges[pair] = Merge{merge_rank, this->inverse_vocab.at(a + b)};
+        merge_rank++;
     }
 }
 
@@ -83,20 +99,22 @@ std::vector<uint32_t> BPE::encode(const std::string &str) const {
             auto pair = std::make_pair(tokens[i], tokens[i + 1]);
             pairs_seen.insert(pair);
         }
-        uint32_t best_pair_merge_idx = UINT32_MAX;
+        uint32_t best_pair_rank = UINT32_MAX;
+        uint32_t best_pair_token_id = 0;
         auto best_pair = std::make_pair(0U, 0U);
         for (auto pair : pairs_seen) {
             auto it = this->merges.find(pair);
             if (it != this->merges.end()) {
-                uint32_t merge_idx = it->second;
+                uint32_t merge_rank = it->second.rank;
                 // merge lower idx pairs first
-                if (merge_idx < best_pair_merge_idx) {
-                    best_pair_merge_idx = merge_idx;
+                if (merge_rank < best_pair_rank) {
+                    best_pair_rank = merge_rank;
+                    best_pair_token_id = it->second.token_id;
                     best_pair = pair;
                 }
             }
         }
-        if (best_pair_merge_idx == UINT32_MAX) {
+        if (best_pair_rank == UINT32_MAX) {
             // no merges found
             break;
         } else {
@@ -106,7 +124,7 @@ std::vector<uint32_t> BPE::encode(const std::string &str) const {
             size_t i = 0;
             while (i < tokens.size()) {
                 if (tokens[i] == best_pair.first && i < tokens.size() - 1 && tokens[i + 1] == best_pair.second) {
-                    new_tokens.push_back(best_pair_merge_idx);
+                    new_tokens.push_back(best_pair_token_id);
                     i += 2;
                 } else {
                     new_tokens.push_back(tokens[i]);
