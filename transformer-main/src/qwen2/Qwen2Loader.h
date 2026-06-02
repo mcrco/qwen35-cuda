@@ -7,6 +7,7 @@
 #include "Qwen2Model.cuh"
 #include "../vendor/safetensors.hh"
 #include <iostream>
+#include <type_traits>
 
 class Qwen2Loader {
 public:
@@ -22,10 +23,17 @@ public:
      */
     static std::shared_ptr<CudaBuffer> load_bf16_tensor(safetensors::safetensors_t &st, const std::string &name, size_t expected_dim_0, size_t expected_dim_1 = 0);
 
-    template<Qwen2Size QWEN2_SIZE>
-    static std::shared_ptr<Qwen2Model<QWEN2_SIZE>> load_qwen2(const std::string &safetensors_file, int32_t max_seq_len) {
+    template<
+        Qwen2Size QWEN2_SIZE,
+        typename weight_t = __nv_bfloat16,
+        typename hidden_t = __nv_bfloat16,
+        typename compute_t = float,
+        typename cache_t = hidden_t,
+        typename logits_t = hidden_t>
+    static std::shared_ptr<Qwen2Model<QWEN2_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_t>> load_qwen2(const std::string &safetensors_file, int32_t max_seq_len) {
+        static_assert(std::is_same_v<weight_t, __nv_bfloat16>, "Qwen2Loader currently loads safetensors weights as bf16 buffers");
         using Qwen2Config = Qwen2Config<QWEN2_SIZE>;
-        auto model = std::make_shared<Qwen2Model<QWEN2_SIZE>>();
+        auto model = std::make_shared<Qwen2Model<QWEN2_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_t>>();
 
         // open safetensors file
         std::string warn, err;
@@ -45,7 +53,7 @@ public:
         model->embedding_weight = load_bf16_tensor(st, "model.embed_tokens.weight", Qwen2Config::vocab_size(), Qwen2Config::hidden_size());
         for (uint32_t layer_idx = 0; layer_idx < Qwen2Config::num_layers(); layer_idx++) {
             std::string layer_prefix = "model.layers." + std::to_string(layer_idx) + ".";
-            model->layers[layer_idx] = std::make_shared<Qwen2Layer<QWEN2_SIZE>>(layer_idx, max_seq_len);
+            model->layers[layer_idx] = std::make_shared<Qwen2Layer<QWEN2_SIZE, weight_t, hidden_t, compute_t, cache_t>>(layer_idx, max_seq_len);
             model->layers[layer_idx]->input_layernorm.weights = load_bf16_tensor(st, layer_prefix + "input_layernorm.weight", Qwen2Config::hidden_size());
             model->layers[layer_idx]->q_proj_weight = load_bf16_tensor(st, layer_prefix + "self_attn.q_proj.weight", Qwen2Config::queries_size(), Qwen2Config::hidden_size());
             model->layers[layer_idx]->q_proj_bias = load_bf16_tensor(st, layer_prefix + "self_attn.q_proj.bias", Qwen2Config::queries_size());

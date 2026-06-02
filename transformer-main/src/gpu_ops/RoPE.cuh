@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <cuda_bf16.h>
+#include <cstdint>
 
 /**
  *  GPT-NeoX Style Rotary Positional Embeddings, see https://nn.labml.ai/transformers/rope/index.html
@@ -16,6 +17,13 @@ public:
      * @param theta_base RoPE parameter
      * @param stream CUDA stream for asynchronous operation
      */
+    template<typename x_t, typename compute_t = float>
+    static void apply_rope_to_qk(x_t *x, int32_t num_heads, int32_t head_dim,
+                                 int32_t position_idx, compute_t theta_base, cudaStream_t stream);
+
     static void apply_rope_to_qk(__nv_bfloat16 *x, int32_t num_heads, int32_t head_dim,
                                  int32_t position_idx, float theta_base, cudaStream_t stream);
 };
+
+extern template void RoPE::apply_rope_to_qk<__nv_bfloat16, float>(__nv_bfloat16*, int32_t, int32_t, int32_t, float, cudaStream_t);
+extern template void RoPE::apply_rope_to_qk<float, float>(float*, int32_t, int32_t, int32_t, float, cudaStream_t);

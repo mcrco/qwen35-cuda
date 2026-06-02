@@ -1,15 +1,11 @@
 #include "BufferOps.cuh"
 
 void BufferOps::copy(const input_float_t *src, input_float_t *dst, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        dst[i] = src[i];
-    }
+    copy<input_float_t, input_float_t, float>(src, dst, n);
 }
 
 void BufferOps::zero(input_float_t *dst, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        dst[i] = input_float_from_float(0.0f);
-    }
+    zero<input_float_t, float>(dst, n);
 }
 
 void BufferOps::zero_float(float *dst, size_t n) {
@@ -19,7 +15,5 @@ void BufferOps::zero_float(float *dst, size_t n) {
 }
 
 void BufferOps::add_in_place(input_float_t *residual, const input_float_t *values, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        residual[i] = input_float_from_float(normalize_input_float(residual[i]) + normalize_input_float(values[i]));
-    }
+    add_in_place<input_float_t, input_float_t, float>(residual, values, n);
 }

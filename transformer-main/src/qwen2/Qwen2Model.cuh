@@ -9,7 +9,13 @@
 #include "../gpu_ops/LayerNorm.cuh"
 #include "../gpu_ops/ArgMax.cuh"
 
-template<Qwen2Size QWEN2_SIZE>
+template<
+    Qwen2Size QWEN2_SIZE,
+    typename weight_t = __nv_bfloat16,
+    typename hidden_t = __nv_bfloat16,
+    typename compute_t = float,
+    typename cache_t = hidden_t,
+    typename logits_t = hidden_t>
 class Qwen2Model {
     cudaStream_t stream;
     std::shared_ptr<CudaBuffer> hidden_state;
@@ -17,11 +23,16 @@ class Qwen2Model {
     ArgMax argmax{Qwen2Config::vocab_size()};
 public:
     using Qwen2Config = Qwen2Config<QWEN2_SIZE>;
-    using Qwen2Layer = Qwen2Layer<QWEN2_SIZE>;
+    using Qwen2Layer = Qwen2Layer<QWEN2_SIZE, weight_t, hidden_t, compute_t, cache_t>;
+    using WeightT = weight_t;
+    using HiddenT = hidden_t;
+    using ComputeT = compute_t;
+    using CacheT = cache_t;
+    using LogitsT = logits_t;
 
     Qwen2Model() {
-        hidden_state = std::make_shared<CudaBuffer>(Qwen2Config::hidden_size() * sizeof(__nv_bfloat16));
-        output_scores = std::make_shared<CudaBuffer>(Qwen2Config::vocab_size() * sizeof(__nv_bfloat16));
+        hidden_state = std::make_shared<CudaBuffer>(Qwen2Config::hidden_size() * sizeof(hidden_t));
+        output_scores = std::make_shared<CudaBuffer>(Qwen2Config::vocab_size() * sizeof(logits_t));
         checkCuda(cudaStreamCreate(&stream));
     }
 
@@ -46,11 +57,11 @@ public:
     int32_t forward(const std::shared_ptr<CudaBuffer> &k_cache, const std::shared_ptr<CudaBuffer> &v_cache, int32_t seq_len, int32_t input_tok_id, float temperature) {
         // Get token embedding.
         // First get pointers from buffers.
-        __nv_bfloat16 *hidden_state_ptr = static_cast<__nv_bfloat16*>(hidden_state->data);
-        __nv_bfloat16 *embedding_ptr = static_cast<__nv_bfloat16*>(embedding_weight->data);
-        __nv_bfloat16 *token_embedding_offset = embedding_ptr + input_tok_id * Qwen2Config::hidden_size();
+        hidden_t *hidden_state_ptr = static_cast<hidden_t*>(hidden_state->data);
+        const weight_t *embedding_ptr = static_cast<const weight_t*>(embedding_weight->data);
+        const weight_t *token_embedding_offset = embedding_ptr + input_tok_id * Qwen2Config::hidden_size();
         // Copy in specific embedding for input token to hidden state.
-        checkCuda(cudaMemcpyAsync(hidden_state_ptr, token_embedding_offset, Qwen2Config::hidden_size() * sizeof(__nv_bfloat16), cudaMemcpyDeviceToDevice, stream));
+        qwen2_layer_detail::convert_copy<weight_t, hidden_t, compute_t>(token_embedding_offset, hidden_state_ptr, Qwen2Config::hidden_size(), stream);
         // Ensure embedding is copied before we apply any layers.
         checkCuda(cudaStreamSynchronize(stream));
 
@@ -60,13 +71,14 @@ public:
         }
 
         // Final layernorm.
-        final_layernorm.normalize_hidden_state(hidden_state, hidden_state, stream);
+        final_layernorm.normalize_hidden_state<hidden_t, weight_t, hidden_t, compute_t>(hidden_state, hidden_state, Qwen2Config::hidden_size(), stream);
 
         // Matmul the embeddings by the final hidden state to get logits.
-        __nv_bfloat16 *output_scores_ptr = static_cast<__nv_bfloat16*>(output_scores->data);
-        MatrixVectorMultiply::bf16_matmul(Qwen2Config::vocab_size(), Qwen2Config::hidden_size(), embedding_ptr, nullptr, hidden_state_ptr, output_scores_ptr, stream);
+        logits_t *output_scores_ptr = static_cast<logits_t*>(output_scores->data);
+        MatrixVectorMultiply::matmul<weight_t, weight_t, hidden_t, logits_t, compute_t>(
+            Qwen2Config::vocab_size(), Qwen2Config::hidden_size(), embedding_ptr, nullptr, hidden_state_ptr, output_scores_ptr, stream);
         // Argmax to find the most likely token.
-        int32_t *next_token_idx_gpu = argmax.bf16_argmax(output_scores, stream);
+        int32_t *next_token_idx_gpu = argmax.argmax_as_float<logits_t>(output_scores, Qwen2Config::vocab_size(), stream);
 
         // Copy to host memory and return.
         int32_t next_token_idx_cpu;

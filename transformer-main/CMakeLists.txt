@@ -56,6 +56,7 @@ add_library(transformer_lib
         src/BPE.h
         src/gpu_ops/ArgMax.cu
         src/gpu_ops/ArgMax.cuh
+        src/gpu_ops/GpuFloat.cuh
         src/gpu_ops/LayerNorm.cu
         src/gpu_ops/LayerNorm.cuh
         src/gpu_ops/RoPE.cu

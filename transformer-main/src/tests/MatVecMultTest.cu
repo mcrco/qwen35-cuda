@@ -3,7 +3,27 @@
 #include <random>
 #include <cuda_bf16.h>
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
+#include "../qwen35/Qwen35Types.cuh"
+#include "../qwen2/Qwen2Model.cuh"
 #include "TestUtils.cuh"
+
+void compile_generic_matvec_signatures() {
+    const int4_t *weights = nullptr;
+    const float *bias = nullptr;
+    const float *hidden_state = nullptr;
+    float *out = nullptr;
+    MatrixVectorMultiply::matmul<int4_t, float, float, float, float>(1, 1, weights, bias, hidden_state, out, cudaStreamPerThread);
+}
+
+void compile_qwen2_float_hidden_signature() {
+    using Model = Qwen2Model<QWEN2_0_5B, __nv_bfloat16, float, float, float, float>;
+    using Layer = Qwen2Layer<QWEN2_0_5B, __nv_bfloat16, float, float, float>;
+    std::shared_ptr<CudaBuffer> cache;
+    std::shared_ptr<CudaBuffer> hidden;
+    Model model;
+    Layer layer{0, 1};
+    layer.forward(cache, cache, hidden, 1, cudaStreamPerThread);
+}
 
 void test_matvec(int32_t m, int32_t k) {
     auto mat = std::make_shared<CudaBuffer>(m * k * sizeof(__nv_bfloat16));

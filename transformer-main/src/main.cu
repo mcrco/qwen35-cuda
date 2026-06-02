@@ -11,14 +11,21 @@
 #include "ErrorCheck.h"
 #include "BPE.h"
 
-template<Qwen2Size QWEN2_SIZE>
+template<
+    Qwen2Size QWEN2_SIZE,
+    typename weight_t = __nv_bfloat16,
+    typename hidden_t = __nv_bfloat16,
+    typename compute_t = float,
+    typename cache_t = hidden_t,
+    typename logits_t = hidden_t>
 class MainRunner {
 public:
+    using Qwen2ModelT = Qwen2Model<QWEN2_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_t>;
     int32_t max_seq_len{};
     int32_t seq_len{0};
     bool interactive{};
     std::string system_prompt{};
-    std::shared_ptr<Qwen2Model<QWEN2_SIZE>> model{};
+    std::shared_ptr<Qwen2ModelT> model{};
     cudaStream_t stream{};
 
     std::shared_ptr<CudaBuffer> k_cache{};
@@ -34,14 +41,14 @@ public:
         auto model_dir = Qwen2Loader::get_model_dir();
 
         using Qwen2Config = Qwen2Config<QWEN2_SIZE>;
-        this->model = Qwen2Loader::load_qwen2<QWEN2_SIZE>(model_dir + "/model.safetensors", max_seq_len);
+        this->model = Qwen2Loader::load_qwen2<QWEN2_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_t>(model_dir + "/model.safetensors", max_seq_len);
         this->tokenizer = std::make_shared<BPE>(model_dir);
 
         cudaStream_t stream{};
         checkCuda(cudaStreamCreate(&stream));
 
-        this->k_cache = std::make_shared<CudaBuffer>(max_seq_len * Qwen2Config::num_layers() * Qwen2Config::keys_size() * sizeof(__nv_bfloat16));
-        this->v_cache = std::make_shared<CudaBuffer>(max_seq_len * Qwen2Config::num_layers() * Qwen2Config::values_size() * sizeof(__nv_bfloat16));
+        this->k_cache = std::make_shared<CudaBuffer>(max_seq_len * Qwen2Config::num_layers() * Qwen2Config::keys_size() * sizeof(cache_t));
+        this->v_cache = std::make_shared<CudaBuffer>(max_seq_len * Qwen2Config::num_layers() * Qwen2Config::values_size() * sizeof(cache_t));
     }
 
     void run() {

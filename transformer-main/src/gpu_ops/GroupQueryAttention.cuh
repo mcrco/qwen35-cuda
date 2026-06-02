@@ -5,7 +5,6 @@
 #include <cuda_bf16.h>
 #include <cstdint>
 #include <memory>
-#include "../ErrorCheck.h"
 
 template<Qwen2Size QWEN2_SIZE>
 class GroupQueryAttention {
@@ -35,5 +34,13 @@ public:
      * @param seq_len current sequence length
      * @param stream CUDA stream for asynchronous operation
      */
+    template<typename query_t, typename key_t, typename value_t, typename output_t, typename compute_t = float>
+    static void sdpa(const query_t *queries, const key_t *k_cache, const value_t *v_cache, output_t *weighted_values, int32_t layer_num, int32_t seq_len, cudaStream_t stream);
+
     static void sdpa(__nv_bfloat16 *queries, __nv_bfloat16 *k_cache, __nv_bfloat16 *v_cache, float *weighted_values, int32_t layer_num, int32_t seq_len, cudaStream_t stream);
 };
+
+extern template void GroupQueryAttention<QWEN2_0_5B>::sdpa<__nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float, float>(
+    const __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, float*, int32_t, int32_t, cudaStream_t);
+extern template void GroupQueryAttention<QWEN2_0_5B>::sdpa<float, float, float, float, float>(
+    const float*, const float*, const float*, float*, int32_t, int32_t, cudaStream_t);
