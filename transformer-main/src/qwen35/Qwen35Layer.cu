@@ -1,7 +1,7 @@
 #include "Qwen35Layer.cuh"
 
-#include "../cpu_ops/Qwen35LinearAttention.cuh"
 #include "../gpu_ops/GroupQueryAttention.cuh"
+#include "../gpu_ops/LinearAttention.cuh"
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
 #include "../gpu_ops/RoPE.cuh"
 #include "../gpu_ops/SiLUMult.cuh"
@@ -283,19 +283,19 @@ void Qwen35LinearAttentionLayer<
   auto conv_weight = static_cast<input_float_t *>(conv1d_weight->data);
   auto conv_bias =
       conv1d_bias ? static_cast<input_float_t *>(conv1d_bias->data) : nullptr;
-  Qwen35LinearAttention::conv1d_silu(
+  LinearAttention::conv1d_silu(
       qkv_ptr, conv_state, conv_weight, conv_bias, mixed,
       Qwen35Config<QWEN35_SIZE>::linear_conv_kernel_dim(),
-      Qwen35Config<QWEN35_SIZE>::linear_conv_size());
+      Qwen35Config<QWEN35_SIZE>::linear_conv_size(), stream);
 
   auto qf = static_cast<float *>(queries_float->data);
   auto kf = static_cast<float *>(keys_float->data);
   auto vf = static_cast<float *>(values_float->data);
-  Qwen35LinearAttention::split_qkv(
+  LinearAttention::split_qkv(
       mixed, qf, kf, vf, Qwen35Config<QWEN35_SIZE>::linear_num_key_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
-      Qwen35Config<QWEN35_SIZE>::linear_value_head_dim());
+      Qwen35Config<QWEN35_SIZE>::linear_value_head_dim(), stream);
   LayerNorm::l2_norm_rows<float, compute_t>(
       queries_float, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
@@ -314,11 +314,11 @@ void Qwen35LinearAttentionLayer<
   auto weighted = static_cast<float *>(weighted_values_float->data);
   auto dt_bias_ptr = static_cast<input_float_t *>(dt_bias->data);
   auto a_log_ptr = static_cast<input_float_t *>(A_log->data);
-  Qwen35LinearAttention::gated_delta_update(
+  LinearAttention::gated_delta_update(
       state, qf, kf, vf, beta_raw_ptr, decay_raw_ptr, dt_bias_ptr, a_log_ptr,
       weighted, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
-      Qwen35Config<QWEN35_SIZE>::linear_value_head_dim());
+      Qwen35Config<QWEN35_SIZE>::linear_value_head_dim(), stream);
 
   norm.template normalize_gated_hidden_state<float, input_float_t,
                                              input_float_t, input_float_t,

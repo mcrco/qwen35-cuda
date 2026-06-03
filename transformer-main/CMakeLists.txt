@@ -69,6 +69,8 @@ add_library(transformer_lib
         src/gpu_ops/Qwen2GroupQueryAttention.cu
         src/gpu_ops/GroupQueryAttention.cuh
         src/gpu_ops/GroupQueryAttention.cu
+        src/gpu_ops/LinearAttention.cuh
+        src/gpu_ops/LinearAttention.cu
         )
 
 target_link_libraries(transformer_lib PRIVATE CUDA::cudart CUDA::nvtx3)
