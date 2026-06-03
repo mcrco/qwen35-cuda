@@ -3,6 +3,7 @@
 #include <memory>
 #include <cstdint>
 #include "../CudaBuffer.cuh"
+#include "../qwen35/Qwen35Types.cuh"
 #include <cuda_bf16.h>
 
 class SiLUMult {
@@ -24,3 +25,4 @@ public:
 
 extern template void SiLUMult::silu_mult_in_place<__nv_bfloat16, __nv_bfloat16, float>(const std::shared_ptr<CudaBuffer>&, const std::shared_ptr<CudaBuffer>&, int32_t, cudaStream_t);
 extern template void SiLUMult::silu_mult_in_place<float, float, float>(const std::shared_ptr<CudaBuffer>&, const std::shared_ptr<CudaBuffer>&, int32_t, cudaStream_t);
+extern template void SiLUMult::silu_mult_in_place<int4_t, int4_t, float>(const std::shared_ptr<CudaBuffer>&, const std::shared_ptr<CudaBuffer>&, int32_t, cudaStream_t);

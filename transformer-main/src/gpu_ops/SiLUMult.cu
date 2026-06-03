@@ -46,3 +46,4 @@ void SiLUMult::silu_mult_in_place(const std::shared_ptr<CudaBuffer> &x, const st
 
 template void SiLUMult::silu_mult_in_place<__nv_bfloat16, __nv_bfloat16, float>(const std::shared_ptr<CudaBuffer>&, const std::shared_ptr<CudaBuffer>&, int32_t, cudaStream_t);
 template void SiLUMult::silu_mult_in_place<float, float, float>(const std::shared_ptr<CudaBuffer>&, const std::shared_ptr<CudaBuffer>&, int32_t, cudaStream_t);
+template void SiLUMult::silu_mult_in_place<int4_t, int4_t, float>(const std::shared_ptr<CudaBuffer>&, const std::shared_ptr<CudaBuffer>&, int32_t, cudaStream_t);

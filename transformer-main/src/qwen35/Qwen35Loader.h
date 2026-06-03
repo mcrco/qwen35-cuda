@@ -30,6 +30,12 @@ public:
     template<Qwen35Size QWEN35_SIZE>
     static void validate_config(const nlohmann::json &cfg);
 
-    template<Qwen35Size QWEN35_SIZE>
-    static std::shared_ptr<Qwen35Model<QWEN35_SIZE>> load_qwen35(const std::string &model_dir);
+    template<
+        Qwen35Size QWEN35_SIZE,
+        typename weight_t = input_float_t,
+        typename hidden_t = input_float_t,
+        typename compute_t = float,
+        typename cache_t = input_float_t,
+        typename logits_t = input_float_t>
+    static std::shared_ptr<Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_t>> load_qwen35(const std::string &model_dir);
 };

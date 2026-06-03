@@ -3,8 +3,54 @@
 #include <memory>
 
 #include "../CudaBuffer.cuh"
+#include "../ErrorCheck.h"
+#include "../gpu_ops/GpuFloat.cuh"
 #include "Qwen35Config.h"
 #include "Qwen35Types.cuh"
+
+namespace qwen35_layer_detail {
+
+constexpr int VECTOR_THREADS = 128;
+constexpr int VECTOR_MAX_BLOCKS = 1024;
+
+template<typename residual_t, typename value_t, typename compute_t>
+__global__ void residualAddKernel(residual_t *residual, const value_t *values, int n) {
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (int i = idx; i < n; i += stride) {
+        compute_t sum = gpu_ops::read_as<compute_t>(residual[i]) + gpu_ops::read_as<compute_t>(values[i]);
+        residual[i] = gpu_ops::write_from<residual_t>(sum);
+    }
+}
+
+template<typename src_t, typename dst_t, typename compute_t>
+__global__ void convertCopyKernel(const src_t *src, dst_t *dst, int n) {
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (int i = idx; i < n; i += stride) {
+        dst[i] = gpu_ops::write_from<dst_t>(gpu_ops::read_as<compute_t>(src[i]));
+    }
+}
+
+template<typename src_t, typename dst_t, typename compute_t>
+inline void convert_copy(const src_t *src, dst_t *dst, int n, cudaStream_t stream) {
+    int threads = VECTOR_THREADS;
+    int blocks = min(VECTOR_MAX_BLOCKS, (n + threads - 1) / threads);
+    convertCopyKernel<src_t, dst_t, compute_t><<<blocks, threads, 0, stream>>>(src, dst, n);
+    checkCuda(cudaGetLastError());
+}
+
+template<typename residual_t, typename value_t, typename compute_t>
+inline void residual_add(residual_t *residual, const value_t *values, int n, cudaStream_t stream) {
+    int threads = VECTOR_THREADS;
+    int blocks = min(VECTOR_MAX_BLOCKS, (n + threads - 1) / threads);
+    residualAddKernel<residual_t, value_t, compute_t><<<blocks, threads, 0, stream>>>(residual, values, n);
+    checkCuda(cudaGetLastError());
+}
+
+} // namespace qwen35_layer_detail
 
 struct Qwen35Cache {
     std::shared_ptr<CudaBuffer> keys;
@@ -14,7 +60,12 @@ struct Qwen35Cache {
     size_t seq_len{};
 };
 
-template<Qwen35Size QWEN35_SIZE>
+template<
+    Qwen35Size QWEN35_SIZE,
+    typename weight_t = input_float_t,
+    typename hidden_t = input_float_t,
+    typename compute_t = float,
+    typename cache_t = input_float_t>
 class Qwen35Layer {
 public:
     explicit Qwen35Layer(size_t layer_num);
@@ -27,7 +78,7 @@ public:
     std::shared_ptr<CudaBuffer> gate_proj_weight;
     std::shared_ptr<CudaBuffer> down_proj_weight;
 
-    virtual void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state) = 0;
+    virtual void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream) = 0;
 
 protected:
     std::shared_ptr<CudaBuffer> norm_hidden_state;
@@ -35,11 +86,16 @@ protected:
     std::shared_ptr<CudaBuffer> ffn_up;
     std::shared_ptr<CudaBuffer> ffn_down;
 
-    void apply_mlp(const std::shared_ptr<CudaBuffer> &hidden_state);
+    void apply_mlp(const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream);
 };
 
-template<Qwen35Size QWEN35_SIZE>
-class Qwen35FullAttnLayer final : public Qwen35Layer<QWEN35_SIZE> {
+template<
+    Qwen35Size QWEN35_SIZE,
+    typename weight_t = input_float_t,
+    typename hidden_t = input_float_t,
+    typename compute_t = float,
+    typename cache_t = input_float_t>
+class Qwen35FullAttnLayer final : public Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t> {
 public:
     explicit Qwen35FullAttnLayer(size_t layer_num);
 
@@ -54,13 +110,14 @@ public:
     std::shared_ptr<CudaBuffer> q_norm_weight;
     std::shared_ptr<CudaBuffer> k_norm_weight;
 
-    void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state) override;
+    void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream) override;
 
 private:
-    using Qwen35Layer<QWEN35_SIZE>::layer_num;
-    using Qwen35Layer<QWEN35_SIZE>::norm_hidden_state;
-    using Qwen35Layer<QWEN35_SIZE>::input_layernorm;
-    using Qwen35Layer<QWEN35_SIZE>::apply_mlp;
+    using Base = Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>;
+    using Base::layer_num;
+    using Base::norm_hidden_state;
+    using Base::input_layernorm;
+    using Base::apply_mlp;
 
     std::shared_ptr<CudaBuffer> q_proj;
     std::shared_ptr<CudaBuffer> queries;
@@ -69,8 +126,13 @@ private:
     std::shared_ptr<CudaBuffer> attention_proj;
 };
 
-template<Qwen35Size QWEN35_SIZE>
-class Qwen35LinearAttentionLayer final : public Qwen35Layer<QWEN35_SIZE> {
+template<
+    Qwen35Size QWEN35_SIZE,
+    typename weight_t = input_float_t,
+    typename hidden_t = input_float_t,
+    typename compute_t = float,
+    typename cache_t = input_float_t>
+class Qwen35LinearAttentionLayer final : public Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t> {
 public:
     explicit Qwen35LinearAttentionLayer(size_t layer_num);
 
@@ -86,13 +148,14 @@ public:
     std::shared_ptr<CudaBuffer> out_proj_weight;
     std::shared_ptr<CudaBuffer> out_proj_bias;
 
-    void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state) override;
+    void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream) override;
 
 private:
-    using Qwen35Layer<QWEN35_SIZE>::layer_num;
-    using Qwen35Layer<QWEN35_SIZE>::norm_hidden_state;
-    using Qwen35Layer<QWEN35_SIZE>::input_layernorm;
-    using Qwen35Layer<QWEN35_SIZE>::apply_mlp;
+    using Base = Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>;
+    using Base::layer_num;
+    using Base::norm_hidden_state;
+    using Base::input_layernorm;
+    using Base::apply_mlp;
 
     std::shared_ptr<CudaBuffer> qkv;
     std::shared_ptr<CudaBuffer> gates;

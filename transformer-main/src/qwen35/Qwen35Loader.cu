@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <type_traits>
 
 Qwen35TensorIndex::Qwen35TensorIndex(const std::string &model_dir) {
     for (const auto &entry : std::filesystem::directory_iterator(model_dir)) {
@@ -162,12 +163,13 @@ void Qwen35Loader::validate_config(const nlohmann::json &cfg) {
     }
 }
 
-template<Qwen35Size QWEN35_SIZE>
-std::shared_ptr<Qwen35Model<QWEN35_SIZE>> Qwen35Loader::load_qwen35(const std::string &model_dir) {
+template<Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t, typename compute_t, typename cache_t, typename logits_t>
+std::shared_ptr<Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_t>> Qwen35Loader::load_qwen35(const std::string &model_dir) {
+    static_assert(std::is_same_v<weight_t, input_float_t>, "Qwen35Loader currently loads checkpoint weights as input_float_t buffers");
     auto text_config = load_text_config(model_dir);
     validate_config<QWEN35_SIZE>(text_config);
     auto tensors = Qwen35TensorIndex(model_dir);
-    auto model = std::make_shared<Qwen35Model<QWEN35_SIZE>>();
+    auto model = std::make_shared<Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_t>>();
     std::string prefix = tensors.contains("model.language_model.embed_tokens.weight") ? "model.language_model" : "model";
 
     model->embedding_weight = tensors.load_input_tensor(prefix + ".embed_tokens.weight", Qwen35Config<QWEN35_SIZE>::vocab_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
@@ -180,9 +182,9 @@ std::shared_ptr<Qwen35Model<QWEN35_SIZE>> Qwen35Loader::load_qwen35(const std::s
 
     for (size_t i = 0; i < Qwen35Config<QWEN35_SIZE>::num_layers(); i++) {
         std::string layer_prefix = prefix + ".layers." + std::to_string(i);
-        std::shared_ptr<Qwen35Layer<QWEN35_SIZE>> layer;
+        std::shared_ptr<Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>> layer;
         if (Qwen35Config<QWEN35_SIZE>::full_attention_layer(i)) {
-            auto full = std::make_shared<Qwen35FullAttnLayer<QWEN35_SIZE>>(i);
+            auto full = std::make_shared<Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>>(i);
             full->q_proj_weight = tensors.load_input_tensor(layer_prefix + ".self_attn.q_proj.weight", 2 * Qwen35Config<QWEN35_SIZE>::queries_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
             if (tensors.contains(layer_prefix + ".self_attn.q_proj.bias")) full->q_proj_bias = tensors.load_input_tensor(layer_prefix + ".self_attn.q_proj.bias", 2 * Qwen35Config<QWEN35_SIZE>::queries_size());
             full->k_proj_weight = tensors.load_input_tensor(layer_prefix + ".self_attn.k_proj.weight", Qwen35Config<QWEN35_SIZE>::keys_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
@@ -195,7 +197,7 @@ std::shared_ptr<Qwen35Model<QWEN35_SIZE>> Qwen35Loader::load_qwen35(const std::s
             full->k_norm_weight = tensors.load_input_tensor(layer_prefix + ".self_attn.k_norm.weight", Qwen35Config<QWEN35_SIZE>::head_size());
             layer = full;
         } else {
-            auto linear = std::make_shared<Qwen35LinearAttentionLayer<QWEN35_SIZE>>(i);
+            auto linear = std::make_shared<Qwen35LinearAttentionLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>>(i);
             if (tensors.contains(layer_prefix + ".linear_attn.in_proj_qkvz.weight")) {
                 linear->in_proj_qkv_weight = tensors.load_input_tensor_slice_rows(layer_prefix + ".linear_attn.in_proj_qkvz.weight", 0, Qwen35Config<QWEN35_SIZE>::linear_conv_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
                 linear->in_proj_z_weight = tensors.load_input_tensor_slice_rows(layer_prefix + ".linear_attn.in_proj_qkvz.weight", Qwen35Config<QWEN35_SIZE>::linear_conv_size(), Qwen35Config<QWEN35_SIZE>::linear_values_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
@@ -234,6 +236,6 @@ std::shared_ptr<Qwen35Model<QWEN35_SIZE>> Qwen35Loader::load_qwen35(const std::s
 template void Qwen35Loader::validate_config<QWEN35_0_8B>(const nlohmann::json &cfg);
 template void Qwen35Loader::validate_config<QWEN35_4B>(const nlohmann::json &cfg);
 template void Qwen35Loader::validate_config<QWEN35_9B>(const nlohmann::json &cfg);
-template std::shared_ptr<Qwen35Model<QWEN35_0_8B>> Qwen35Loader::load_qwen35<QWEN35_0_8B>(const std::string &model_dir);
-template std::shared_ptr<Qwen35Model<QWEN35_4B>> Qwen35Loader::load_qwen35<QWEN35_4B>(const std::string &model_dir);
-template std::shared_ptr<Qwen35Model<QWEN35_9B>> Qwen35Loader::load_qwen35<QWEN35_9B>(const std::string &model_dir);
+template std::shared_ptr<Qwen35Model<QWEN35_0_8B, input_float_t, input_float_t, float, input_float_t, input_float_t>> Qwen35Loader::load_qwen35<QWEN35_0_8B, input_float_t, input_float_t, float, input_float_t, input_float_t>(const std::string &model_dir);
+template std::shared_ptr<Qwen35Model<QWEN35_4B, input_float_t, input_float_t, float, input_float_t, input_float_t>> Qwen35Loader::load_qwen35<QWEN35_4B, input_float_t, input_float_t, float, input_float_t, input_float_t>(const std::string &model_dir);
+template std::shared_ptr<Qwen35Model<QWEN35_9B, input_float_t, input_float_t, float, input_float_t, input_float_t>> Qwen35Loader::load_qwen35<QWEN35_9B, input_float_t, input_float_t, float, input_float_t, input_float_t>(const std::string &model_dir);
