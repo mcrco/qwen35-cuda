@@ -1,9 +1,9 @@
 #include "Qwen35Layer.cuh"
 
 #include "../cpu_ops/Qwen35LinearAttention.cuh"
-#include "../cpu_ops/Qwen35RoPE.cuh"
 #include "../gpu_ops/GroupQueryAttention.cuh"
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
+#include "../gpu_ops/RoPE.cuh"
 #include "../gpu_ops/SiLUMult.cuh"
 
 #include <cmath>
@@ -163,12 +163,16 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t,
   }
   checkCuda(cudaStreamSynchronize(stream));
 
-  Qwen35RoPE::apply_partial_rope_to_qk(
-      query_ptr, Qwen35Config<QWEN35_SIZE>::num_query_heads(), new_keys,
-      Qwen35Config<QWEN35_SIZE>::num_kv_heads(),
+  RoPE::apply_rope_to_qk<input_float_t, compute_t>(
+      query_ptr, Qwen35Config<QWEN35_SIZE>::num_query_heads(),
       Qwen35Config<QWEN35_SIZE>::head_size(),
       Qwen35Config<QWEN35_SIZE>::rotary_dim(), seq_len,
-      Qwen35Config<QWEN35_SIZE>::rope_theta_base());
+      Qwen35Config<QWEN35_SIZE>::rope_theta_base(), stream);
+  RoPE::apply_rope_to_qk<input_float_t, compute_t>(
+      new_keys, Qwen35Config<QWEN35_SIZE>::num_kv_heads(),
+      Qwen35Config<QWEN35_SIZE>::head_size(),
+      Qwen35Config<QWEN35_SIZE>::rotary_dim(), seq_len,
+      Qwen35Config<QWEN35_SIZE>::rope_theta_base(), stream);
 
   auto attn_out = static_cast<input_float_t *>(attention_output->data);
   GroupQueryAttention<QWEN35_SIZE>::

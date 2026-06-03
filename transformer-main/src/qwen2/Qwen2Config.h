@@ -53,6 +53,11 @@ struct Qwen2Config {
         return 1e6f;
     }
 
+    static constexpr size_t rotary_dim() {
+        if constexpr (size == QWEN2_0_5B) return head_size();
+        throw std::logic_error("Unknown size");
+    }
+
     // Computed values based on constants
 
     /**

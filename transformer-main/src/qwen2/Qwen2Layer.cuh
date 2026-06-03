@@ -144,8 +144,8 @@ public:
         MatrixVectorMultiply::matmul<weight_t, weight_t, hidden_t, cache_t, compute_t>(
             Qwen2Config::values_size(), Qwen2Config::hidden_size(), v_proj_weight_ptr, v_proj_bias_ptr, norm_hidden_state_ptr, vals_ptr, stream);
 
-        RoPE::apply_rope_to_qk<hidden_t, compute_t>(queries_ptr, Qwen2Config::num_query_heads(), Qwen2Config::head_size(), token_pos, Qwen2Config::rope_theta_base(), stream);
-        RoPE::apply_rope_to_qk<cache_t, compute_t>(keys_ptr, Qwen2Config::num_kv_heads(), Qwen2Config::head_size(), token_pos, Qwen2Config::rope_theta_base(), stream);
+        RoPE::apply_rope_to_qk<hidden_t, compute_t>(queries_ptr, Qwen2Config::num_query_heads(), Qwen2Config::head_size(), Qwen2Config::rotary_dim(), token_pos, Qwen2Config::rope_theta_base(), stream);
+        RoPE::apply_rope_to_qk<cache_t, compute_t>(keys_ptr, Qwen2Config::num_kv_heads(), Qwen2Config::head_size(), Qwen2Config::rotary_dim(), token_pos, Qwen2Config::rope_theta_base(), stream);
 
         compute_t *attention_output_ptr = static_cast<compute_t *>(attention_output->data);
         checkCuda(cudaMemsetAsync(attention_output->data, 0, attention_output->size, stream));
