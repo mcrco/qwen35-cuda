@@ -5,6 +5,7 @@
 #include "../CudaBuffer.cuh"
 #include "../ErrorCheck.h"
 #include "../gpu_ops/GpuFloat.cuh"
+#include "../gpu_ops/LayerNorm.cuh"
 #include "Qwen35Config.h"
 #include "Qwen35Types.cuh"
 
@@ -72,8 +73,8 @@ public:
     virtual ~Qwen35Layer() = default;
 
     size_t layer_num{};
-    std::shared_ptr<CudaBuffer> input_layernorm;
-    std::shared_ptr<CudaBuffer> post_attention_layernorm;
+    LayerNorm input_layernorm;
+    LayerNorm post_attention_layernorm;
     std::shared_ptr<CudaBuffer> up_proj_weight;
     std::shared_ptr<CudaBuffer> gate_proj_weight;
     std::shared_ptr<CudaBuffer> down_proj_weight;
@@ -107,8 +108,8 @@ public:
     std::shared_ptr<CudaBuffer> v_proj_bias;
     std::shared_ptr<CudaBuffer> o_proj_weight;
     std::shared_ptr<CudaBuffer> o_proj_bias;
-    std::shared_ptr<CudaBuffer> q_norm_weight;
-    std::shared_ptr<CudaBuffer> k_norm_weight;
+    LayerNorm q_norm;
+    LayerNorm k_norm;
 
     void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream) override;
 
@@ -144,7 +145,7 @@ public:
     std::shared_ptr<CudaBuffer> conv1d_bias;
     std::shared_ptr<CudaBuffer> dt_bias;
     std::shared_ptr<CudaBuffer> A_log;
-    std::shared_ptr<CudaBuffer> norm_weight;
+    LayerNorm norm;
     std::shared_ptr<CudaBuffer> out_proj_weight;
     std::shared_ptr<CudaBuffer> out_proj_bias;
 

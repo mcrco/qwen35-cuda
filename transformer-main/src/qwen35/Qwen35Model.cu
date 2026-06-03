@@ -1,6 +1,5 @@
 #include "Qwen35Model.cuh"
 
-#include "../cpu_ops/Qwen35LayerNorm.cuh"
 #include "../cpu_ops/Qwen35Sampling.cuh"
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
 
@@ -52,12 +51,12 @@ int32_t Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t, logits_
 
     checkCuda(cudaStreamSynchronize(stream));
     auto norm_hidden = static_cast<hidden_t *>(norm_hidden_state->data);
-    Qwen35LayerNorm::zero_centered_rms_norm(
-        static_cast<weight_t *>(final_layernorm->data),
-        hidden,
-        norm_hidden,
-        Qwen35Config<QWEN35_SIZE>::hidden_size(),
-        Qwen35Config<QWEN35_SIZE>::rms_norm_eps());
+    final_layernorm
+        .template zero_centered_rms_norm<hidden_t, weight_t, hidden_t,
+                                         compute_t>(
+            hidden_state, norm_hidden_state,
+            Qwen35Config<QWEN35_SIZE>::hidden_size(),
+            Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
 
     auto lm_head = static_cast<weight_t *>(lm_head_weight->data);
     auto output_scores_ptr = static_cast<logits_t *>(output_scores->data);

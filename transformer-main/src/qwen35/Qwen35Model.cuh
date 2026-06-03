@@ -6,6 +6,7 @@
 
 #include "../CudaBuffer.cuh"
 #include "../gpu_ops/ArgMax.cuh"
+#include "../gpu_ops/LayerNorm.cuh"
 #include "Qwen35Config.h"
 #include "Qwen35Layer.cuh"
 #include "Qwen35Types.cuh"
@@ -25,7 +26,7 @@ public:
     std::shared_ptr<CudaBuffer> embedding_weight;
     std::shared_ptr<CudaBuffer> lm_head_weight;
     std::vector<std::shared_ptr<Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>>> layers;
-    std::shared_ptr<CudaBuffer> final_layernorm;
+    LayerNorm final_layernorm;
 
     Qwen35Cache allocate_cache(size_t max_seq_len) const;
     int32_t forward(Qwen35Cache &cache, int32_t input_tok_id, float temperature);

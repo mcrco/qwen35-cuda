@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../CudaBuffer.cuh"
+#include "../qwen35/Qwen35Types.cuh"
 #include <memory>
 #include <cuda_bf16.h>
 
@@ -19,7 +20,7 @@ public:
     /**
      * Initialize temporary space
      */
-    explicit LayerNorm(int32_t len);
+    explicit LayerNorm(int32_t len = 0);
 
     /**
      * Apply variance correction and scaling factors to hidden state.
@@ -31,6 +32,30 @@ public:
      */
     template<typename hidden_t, typename weight_t, typename output_t, typename compute_t = float>
     void normalize_hidden_state(const std::shared_ptr<CudaBuffer> &hidden_state, const std::shared_ptr<CudaBuffer> &output, int32_t n, cudaStream_t stream);
+
+    /**
+     * Qwen3.5 zero-centered RMS norm: input * (1 + weight) / rms.
+     */
+    template<typename hidden_t, typename weight_t, typename output_t, typename compute_t = float>
+    void zero_centered_rms_norm(const std::shared_ptr<CudaBuffer> &hidden_state, const std::shared_ptr<CudaBuffer> &output, int32_t n, float eps, cudaStream_t stream);
+
+    template<typename hidden_t, typename weight_t, typename output_t, typename compute_t = float>
+    void zero_centered_rms_norm(const hidden_t *hidden_state, output_t *output, int32_t n, float eps, cudaStream_t stream);
+
+    /**
+     * Row-wise gated RMS norm: input * weight * silu(gate) / rms(input row).
+     * @param hidden_state GPU input
+     * @param gate Gate vector with shape (rows, cols)
+     * @param output Location to write output
+     * @param rows Number of rows
+     * @param cols Number of columns per row
+     * @param stream CUDA stream for asycnhronous operation
+     */
+    template<typename hidden_t, typename gate_t, typename weight_t, typename output_t, typename compute_t = float>
+    void normalize_gated_hidden_state(const std::shared_ptr<CudaBuffer> &hidden_state, const std::shared_ptr<CudaBuffer> &gate, const std::shared_ptr<CudaBuffer> &output, int32_t rows, int32_t cols, float eps, cudaStream_t stream);
+
+    template<typename value_t, typename compute_t = float>
+    static void l2_norm_rows(const std::shared_ptr<CudaBuffer> &values, int32_t rows, int32_t cols, float scale, float eps, cudaStream_t stream);
 
     void normalize_hidden_state(const std::shared_ptr<CudaBuffer> &hidden_state, const std::shared_ptr<CudaBuffer> &output, cudaStream_t stream);
 };
@@ -45,4 +70,42 @@ extern template void LayerNorm::normalize_hidden_state<float, __nv_bfloat16, flo
     const std::shared_ptr<CudaBuffer> &hidden_state,
     const std::shared_ptr<CudaBuffer> &output,
     int32_t n,
+    cudaStream_t stream);
+
+extern template void LayerNorm::zero_centered_rms_norm<__nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float>(
+    const std::shared_ptr<CudaBuffer> &hidden_state,
+    const std::shared_ptr<CudaBuffer> &output,
+    int32_t n,
+    float eps,
+    cudaStream_t stream);
+
+extern template void LayerNorm::zero_centered_rms_norm<input_float_t, input_float_t, input_float_t, float>(
+    const std::shared_ptr<CudaBuffer> &hidden_state,
+    const std::shared_ptr<CudaBuffer> &output,
+    int32_t n,
+    float eps,
+    cudaStream_t stream);
+
+extern template void LayerNorm::zero_centered_rms_norm<input_float_t, input_float_t, input_float_t, float>(
+    const input_float_t *hidden_state,
+    input_float_t *output,
+    int32_t n,
+    float eps,
+    cudaStream_t stream);
+
+extern template void LayerNorm::normalize_gated_hidden_state<float, input_float_t, input_float_t, input_float_t, float>(
+    const std::shared_ptr<CudaBuffer> &hidden_state,
+    const std::shared_ptr<CudaBuffer> &gate,
+    const std::shared_ptr<CudaBuffer> &output,
+    int32_t rows,
+    int32_t cols,
+    float eps,
+    cudaStream_t stream);
+
+extern template void LayerNorm::l2_norm_rows<float, float>(
+    const std::shared_ptr<CudaBuffer> &values,
+    int32_t rows,
+    int32_t cols,
+    float scale,
+    float eps,
     cudaStream_t stream);

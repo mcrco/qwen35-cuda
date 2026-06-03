@@ -1,7 +1,6 @@
 #include "Qwen35Layer.cuh"
 
 #include "../cpu_ops/Qwen35GroupQueryAttention.cuh"
-#include "../cpu_ops/Qwen35LayerNorm.cuh"
 #include "../cpu_ops/Qwen35LinearAttention.cuh"
 #include "../cpu_ops/Qwen35RoPE.cuh"
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
@@ -9,10 +8,8 @@
 
 #include <cmath>
 
-template <Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t,
-          typename compute_t, typename cache_t>
-Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>::Qwen35Layer(
-    size_t layer_num)
+template <Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t, typename compute_t, typename cache_t>
+Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>::Qwen35Layer(size_t layer_num)
     : layer_num(layer_num) {
   norm_hidden_state = std::make_shared<CudaBuffer>(
       Qwen35Config<QWEN35_SIZE>::hidden_size() * sizeof(hidden_t));
@@ -24,17 +21,17 @@ Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>::Qwen35Layer(
       Qwen35Config<QWEN35_SIZE>::hidden_size() * sizeof(hidden_t));
 }
 
-template <Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t,
-          typename compute_t, typename cache_t>
+template <Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t, typename compute_t, typename cache_t>
 void Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>::
-    apply_mlp(const std::shared_ptr<CudaBuffer> &hidden_state,
-              cudaStream_t stream) {
+    apply_mlp(const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream) {
   auto hidden = static_cast<hidden_t *>(hidden_state->data);
   auto norm_hidden = static_cast<hidden_t *>(norm_hidden_state->data);
-  Qwen35LayerNorm::zero_centered_rms_norm(
-      static_cast<weight_t *>(post_attention_layernorm->data), hidden,
-      norm_hidden, Qwen35Config<QWEN35_SIZE>::hidden_size(),
-      Qwen35Config<QWEN35_SIZE>::rms_norm_eps());
+  post_attention_layernorm
+      .template zero_centered_rms_norm<hidden_t, weight_t, hidden_t,
+                                       compute_t>(
+          hidden_state, norm_hidden_state,
+          Qwen35Config<QWEN35_SIZE>::hidden_size(),
+          Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
 
   auto gate_weight = static_cast<weight_t *>(gate_proj_weight->data);
   auto up_weight = static_cast<weight_t *>(up_proj_weight->data);
@@ -90,13 +87,18 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t,
                                                &hidden_state,
                                            cudaStream_t stream) {
   checkCuda(cudaStreamSynchronize(stream));
+
   size_t seq_len = cache.seq_len;
+
+  //
   auto hidden = static_cast<hidden_t *>(hidden_state->data);
   auto norm_hidden = static_cast<hidden_t *>(norm_hidden_state->data);
-  Qwen35LayerNorm::zero_centered_rms_norm(
-      static_cast<weight_t *>(input_layernorm->data), hidden, norm_hidden,
-      Qwen35Config<QWEN35_SIZE>::hidden_size(),
-      Qwen35Config<QWEN35_SIZE>::rms_norm_eps());
+  input_layernorm
+      .template zero_centered_rms_norm<hidden_t, weight_t, hidden_t,
+                                       compute_t>(
+          hidden_state, norm_hidden_state,
+          Qwen35Config<QWEN35_SIZE>::hidden_size(),
+          Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
 
   auto q_proj_out = static_cast<input_float_t *>(q_proj->data);
   MatrixVectorMultiply::matmul<weight_t, weight_t, hidden_t, input_float_t,
@@ -111,12 +113,12 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t,
   auto query_ptr = static_cast<input_float_t *>(queries->data);
   auto gate_ptr = static_cast<input_float_t *>(gate->data);
   for (size_t h = 0; h < Qwen35Config<QWEN35_SIZE>::num_query_heads(); h++) {
-    Qwen35LayerNorm::zero_centered_rms_norm(
-        static_cast<input_float_t *>(q_norm_weight->data),
+    q_norm.template zero_centered_rms_norm<input_float_t, input_float_t,
+                                           input_float_t, compute_t>(
         q_proj_out + h * 2 * Qwen35Config<QWEN35_SIZE>::head_size(),
         query_ptr + h * Qwen35Config<QWEN35_SIZE>::head_size(),
         Qwen35Config<QWEN35_SIZE>::head_size(),
-        Qwen35Config<QWEN35_SIZE>::rms_norm_eps());
+        Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
     qwen35_layer_detail::convert_copy<input_float_t, input_float_t, compute_t>(
         q_proj_out + h * 2 * Qwen35Config<QWEN35_SIZE>::head_size() +
             Qwen35Config<QWEN35_SIZE>::head_size(),
@@ -152,13 +154,14 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t,
   checkCuda(cudaStreamSynchronize(stream));
 
   for (size_t h = 0; h < Qwen35Config<QWEN35_SIZE>::num_kv_heads(); h++) {
-    Qwen35LayerNorm::zero_centered_rms_norm(
-        static_cast<input_float_t *>(k_norm_weight->data),
+    k_norm.template zero_centered_rms_norm<input_float_t, input_float_t,
+                                           input_float_t, compute_t>(
         new_keys + h * Qwen35Config<QWEN35_SIZE>::head_size(),
         new_keys + h * Qwen35Config<QWEN35_SIZE>::head_size(),
         Qwen35Config<QWEN35_SIZE>::head_size(),
-        Qwen35Config<QWEN35_SIZE>::rms_norm_eps());
+        Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
   }
+  checkCuda(cudaStreamSynchronize(stream));
 
   Qwen35RoPE::apply_partial_rope_to_qk(
       query_ptr, Qwen35Config<QWEN35_SIZE>::num_query_heads(), new_keys,
@@ -234,10 +237,12 @@ void Qwen35LinearAttentionLayer<
   checkCuda(cudaStreamSynchronize(stream));
   auto hidden = static_cast<hidden_t *>(hidden_state->data);
   auto norm_hidden = static_cast<hidden_t *>(norm_hidden_state->data);
-  Qwen35LayerNorm::zero_centered_rms_norm(
-      static_cast<weight_t *>(input_layernorm->data), hidden, norm_hidden,
-      Qwen35Config<QWEN35_SIZE>::hidden_size(),
-      Qwen35Config<QWEN35_SIZE>::rms_norm_eps());
+  input_layernorm
+      .template zero_centered_rms_norm<hidden_t, weight_t, hidden_t,
+                                       compute_t>(
+          hidden_state, norm_hidden_state,
+          Qwen35Config<QWEN35_SIZE>::hidden_size(),
+          Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
 
   auto qkv_ptr = static_cast<input_float_t *>(qkv->data);
   auto gates_ptr = static_cast<input_float_t *>(gates->data);
@@ -290,15 +295,16 @@ void Qwen35LinearAttentionLayer<
       Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
       Qwen35Config<QWEN35_SIZE>::linear_value_head_dim());
-  Qwen35LayerNorm::l2norm_rows(
-      qf, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
+  LayerNorm::l2_norm_rows<float, compute_t>(
+      queries_float, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
       1.0f / std::sqrt(static_cast<float>(
                  Qwen35Config<QWEN35_SIZE>::linear_key_head_dim())),
-      1e-6f);
-  Qwen35LayerNorm::l2norm_rows(
-      kf, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
-      Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(), 1.0f, 1e-6f);
+      1e-6f, stream);
+  LayerNorm::l2_norm_rows<float, compute_t>(
+      keys_float, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
+      Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(), 1.0f, 1e-6f, stream);
+  checkCuda(cudaStreamSynchronize(stream));
 
   auto state = static_cast<input_float_t *>(cache.recurrent_states->data) +
                layer_num * Qwen35Config<QWEN35_SIZE>::linear_num_value_heads() *
@@ -313,12 +319,13 @@ void Qwen35LinearAttentionLayer<
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
       Qwen35Config<QWEN35_SIZE>::linear_value_head_dim());
 
-  Qwen35LayerNorm::gated_rms_norm(
-      static_cast<input_float_t *>(norm_weight->data), weighted, gates_ptr,
-      static_cast<input_float_t *>(gated_weighted_values->data),
+  norm.template normalize_gated_hidden_state<float, input_float_t,
+                                             input_float_t, input_float_t,
+                                             compute_t>(
+      weighted_values_float, gates, gated_weighted_values,
       Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_value_head_dim(),
-      Qwen35Config<QWEN35_SIZE>::rms_norm_eps());
+      Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
   MatrixVectorMultiply::matmul<weight_t, weight_t, input_float_t, hidden_t,
                                compute_t>(
       Qwen35Config<QWEN35_SIZE>::hidden_size(),

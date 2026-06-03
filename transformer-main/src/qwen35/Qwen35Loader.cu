@@ -173,7 +173,7 @@ std::shared_ptr<Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t,
     std::string prefix = tensors.contains("model.language_model.embed_tokens.weight") ? "model.language_model" : "model";
 
     model->embedding_weight = tensors.load_input_tensor(prefix + ".embed_tokens.weight", Qwen35Config<QWEN35_SIZE>::vocab_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
-    model->final_layernorm = tensors.load_input_tensor(prefix + ".norm.weight", Qwen35Config<QWEN35_SIZE>::hidden_size());
+    model->final_layernorm.weights = tensors.load_input_tensor(prefix + ".norm.weight", Qwen35Config<QWEN35_SIZE>::hidden_size());
     if (Qwen35Config<QWEN35_SIZE>::embedding_tying() || !tensors.contains("lm_head.weight")) {
         model->lm_head_weight = model->embedding_weight;
     } else {
@@ -193,8 +193,8 @@ std::shared_ptr<Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t,
             if (tensors.contains(layer_prefix + ".self_attn.v_proj.bias")) full->v_proj_bias = tensors.load_input_tensor(layer_prefix + ".self_attn.v_proj.bias", Qwen35Config<QWEN35_SIZE>::values_size());
             full->o_proj_weight = tensors.load_input_tensor(layer_prefix + ".self_attn.o_proj.weight", Qwen35Config<QWEN35_SIZE>::hidden_size(), Qwen35Config<QWEN35_SIZE>::queries_size());
             if (tensors.contains(layer_prefix + ".self_attn.o_proj.bias")) full->o_proj_bias = tensors.load_input_tensor(layer_prefix + ".self_attn.o_proj.bias", Qwen35Config<QWEN35_SIZE>::hidden_size());
-            full->q_norm_weight = tensors.load_input_tensor(layer_prefix + ".self_attn.q_norm.weight", Qwen35Config<QWEN35_SIZE>::head_size());
-            full->k_norm_weight = tensors.load_input_tensor(layer_prefix + ".self_attn.k_norm.weight", Qwen35Config<QWEN35_SIZE>::head_size());
+            full->q_norm.weights = tensors.load_input_tensor(layer_prefix + ".self_attn.q_norm.weight", Qwen35Config<QWEN35_SIZE>::head_size());
+            full->k_norm.weights = tensors.load_input_tensor(layer_prefix + ".self_attn.k_norm.weight", Qwen35Config<QWEN35_SIZE>::head_size());
             layer = full;
         } else {
             auto linear = std::make_shared<Qwen35LinearAttentionLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>>(i);
@@ -216,14 +216,14 @@ std::shared_ptr<Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t,
             if (tensors.contains(layer_prefix + ".linear_attn.conv1d.bias")) linear->conv1d_bias = tensors.load_input_tensor(layer_prefix + ".linear_attn.conv1d.bias", Qwen35Config<QWEN35_SIZE>::linear_conv_size());
             linear->dt_bias = tensors.load_input_tensor(layer_prefix + ".linear_attn.dt_bias", Qwen35Config<QWEN35_SIZE>::linear_num_value_heads());
             linear->A_log = tensors.load_input_tensor(layer_prefix + ".linear_attn.A_log", Qwen35Config<QWEN35_SIZE>::linear_num_value_heads());
-            linear->norm_weight = tensors.load_input_tensor(layer_prefix + ".linear_attn.norm.weight", Qwen35Config<QWEN35_SIZE>::linear_value_head_dim());
+            linear->norm.weights = tensors.load_input_tensor(layer_prefix + ".linear_attn.norm.weight", Qwen35Config<QWEN35_SIZE>::linear_value_head_dim());
             linear->out_proj_weight = tensors.load_input_tensor(layer_prefix + ".linear_attn.out_proj.weight", Qwen35Config<QWEN35_SIZE>::hidden_size(), Qwen35Config<QWEN35_SIZE>::linear_values_size());
             if (tensors.contains(layer_prefix + ".linear_attn.out_proj.bias")) linear->out_proj_bias = tensors.load_input_tensor(layer_prefix + ".linear_attn.out_proj.bias", Qwen35Config<QWEN35_SIZE>::hidden_size());
             layer = linear;
         }
 
-        layer->input_layernorm = tensors.load_input_tensor(layer_prefix + ".input_layernorm.weight", Qwen35Config<QWEN35_SIZE>::hidden_size());
-        layer->post_attention_layernorm = tensors.load_input_tensor(layer_prefix + ".post_attention_layernorm.weight", Qwen35Config<QWEN35_SIZE>::hidden_size());
+        layer->input_layernorm.weights = tensors.load_input_tensor(layer_prefix + ".input_layernorm.weight", Qwen35Config<QWEN35_SIZE>::hidden_size());
+        layer->post_attention_layernorm.weights = tensors.load_input_tensor(layer_prefix + ".post_attention_layernorm.weight", Qwen35Config<QWEN35_SIZE>::hidden_size());
         layer->up_proj_weight = tensors.load_input_tensor(layer_prefix + ".mlp.up_proj.weight", Qwen35Config<QWEN35_SIZE>::intermediate_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
         layer->gate_proj_weight = tensors.load_input_tensor(layer_prefix + ".mlp.gate_proj.weight", Qwen35Config<QWEN35_SIZE>::intermediate_size(), Qwen35Config<QWEN35_SIZE>::hidden_size());
         layer->down_proj_weight = tensors.load_input_tensor(layer_prefix + ".mlp.down_proj.weight", Qwen35Config<QWEN35_SIZE>::hidden_size(), Qwen35Config<QWEN35_SIZE>::intermediate_size());
