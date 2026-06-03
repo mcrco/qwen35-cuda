@@ -43,6 +43,7 @@ void MatrixVectorMultiply::bf16_matmul(int32_t m, int32_t k, const __nv_bfloat16
 template void MatrixVectorMultiply::matmul<__nv_bfloat16, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float>(int32_t, int32_t, const __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, __nv_bfloat16*, cudaStream_t);
 template void MatrixVectorMultiply::matmul<__nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, float>(int32_t, int32_t, const __nv_bfloat16*, const __nv_bfloat16*, const float*, __nv_bfloat16*, cudaStream_t);
 template void MatrixVectorMultiply::matmul<__nv_bfloat16, __nv_bfloat16, float, float, float>(int32_t, int32_t, const __nv_bfloat16*, const __nv_bfloat16*, const float*, float*, cudaStream_t);
+template void MatrixVectorMultiply::matmul<float, float, float, float, float>(int32_t, int32_t, const float*, const float*, const float*, float*, cudaStream_t);
 template void MatrixVectorMultiply::matmul<int4_t, float, float, float, float>(int32_t, int32_t, const int4_t*, const float*, const float*, float*, cudaStream_t);
 template void MatrixVectorMultiply::matmul<int4_t, int4_t, int4_t, int4_t, float>(int32_t, int32_t, const int4_t*, const int4_t*, const int4_t*, int4_t*, cudaStream_t);
 

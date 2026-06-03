@@ -15,11 +15,6 @@ float normalize_test_value<__nv_bfloat16>(__nv_bfloat16 x) {
     return static_cast<float>(x);
 }
 
-template<>
-float normalize_test_value<input_float_t>(input_float_t x) {
-    return normalize_input_float(x);
-}
-
 static __nv_bfloat16 test_value_from_float_bf16(float x) {
     return __nv_bfloat16{x};
 }
@@ -34,22 +29,14 @@ __nv_bfloat16 test_value_from_float<__nv_bfloat16>(float x) {
     return test_value_from_float_bf16(x);
 }
 
-template<>
-input_float_t test_value_from_float<input_float_t>(float x) {
-    return input_float_from_float(x);
-}
-
 template<typename x_t>
-void check_rope_allclose(x_t *gpu_vals, x_t *cpu_vals, int32_t len);
+void check_rope_allclose(x_t *gpu_vals, x_t *cpu_vals, int32_t len) {
+    check_fp32_allclose(gpu_vals, cpu_vals, len);
+}
 
 template<>
 void check_rope_allclose<__nv_bfloat16>(__nv_bfloat16 *gpu_vals, __nv_bfloat16 *cpu_vals, int32_t len) {
     check_bf16_allclose(gpu_vals, cpu_vals, len);
-}
-
-template<>
-void check_rope_allclose<input_float_t>(input_float_t *gpu_vals, input_float_t *cpu_vals, int32_t len) {
-    check_input_float_allclose(gpu_vals, cpu_vals, len);
 }
 
 template<typename x_t>

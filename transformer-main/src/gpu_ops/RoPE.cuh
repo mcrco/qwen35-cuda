@@ -29,4 +29,3 @@ public:
 
 extern template void RoPE::apply_rope_to_qk<__nv_bfloat16, float>(__nv_bfloat16*, int32_t, int32_t, int32_t, int32_t, float, cudaStream_t);
 extern template void RoPE::apply_rope_to_qk<float, float>(float*, int32_t, int32_t, int32_t, int32_t, float, cudaStream_t);
-extern template void RoPE::apply_rope_to_qk<input_float_t, float>(input_float_t*, int32_t, int32_t, int32_t, int32_t, float, cudaStream_t);

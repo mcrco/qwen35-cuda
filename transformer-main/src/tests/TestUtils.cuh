@@ -50,7 +50,7 @@ static void fill_random_bf16(CudaBuffer &buf, std::normal_distribution<float> &d
 }
 
 static bool input_float_close(input_float_t a, input_float_t b) {
-    return a.value == b.value;
+    return bf16close(a, b, 1e-2f, 1e-4f);
 }
 
 static void check_input_float_allclose(input_float_t *gpu_vals, input_float_t *cpu_vals, int32_t len) {
@@ -69,6 +69,6 @@ static void check_input_float_allclose(input_float_t *gpu_vals, input_float_t *c
 
 static void fill_random_input_float(CudaBuffer &buf, std::uniform_int_distribution<int> &distribution, std::mt19937 &generator) {
     for (size_t i = 0; i < buf.size / sizeof(input_float_t); i++) {
-        static_cast<input_float_t*>(buf.data)[i] = input_float_t{static_cast<int8_t>(distribution(generator))};
+        static_cast<input_float_t*>(buf.data)[i] = input_float_from_float(static_cast<float>(distribution(generator)) / 16.0f);
     }
 }

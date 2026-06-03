@@ -79,16 +79,16 @@ extern template void LayerNorm::zero_centered_rms_norm<__nv_bfloat16, __nv_bfloa
     float eps,
     cudaStream_t stream);
 
-extern template void LayerNorm::zero_centered_rms_norm<input_float_t, input_float_t, input_float_t, float>(
+extern template void LayerNorm::zero_centered_rms_norm<float, float, float, float>(
     const std::shared_ptr<CudaBuffer> &hidden_state,
     const std::shared_ptr<CudaBuffer> &output,
     int32_t n,
     float eps,
     cudaStream_t stream);
 
-extern template void LayerNorm::zero_centered_rms_norm<input_float_t, input_float_t, input_float_t, float>(
-    const input_float_t *hidden_state,
-    input_float_t *output,
+extern template void LayerNorm::zero_centered_rms_norm<float, float, float, float>(
+    const float *hidden_state,
+    float *output,
     int32_t n,
     float eps,
     cudaStream_t stream);
