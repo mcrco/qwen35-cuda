@@ -1,8 +1,8 @@
 #include "Qwen35Layer.cuh"
 
-#include "../cpu_ops/Qwen35GroupQueryAttention.cuh"
 #include "../cpu_ops/Qwen35LinearAttention.cuh"
 #include "../cpu_ops/Qwen35RoPE.cuh"
+#include "../gpu_ops/GroupQueryAttention.cuh"
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
 #include "../gpu_ops/SiLUMult.cuh"
 
@@ -171,14 +171,11 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t,
       Qwen35Config<QWEN35_SIZE>::rope_theta_base());
 
   auto attn_out = static_cast<input_float_t *>(attention_output->data);
-  Qwen35GroupQueryAttention::sdpa(query_ptr, keys_cache, values_cache, attn_out,
-                                  gate_ptr, layer_num, seq_len,
-                                  Qwen35Config<QWEN35_SIZE>::num_layers(),
-                                  Qwen35Config<QWEN35_SIZE>::num_query_heads(),
-                                  Qwen35Config<QWEN35_SIZE>::num_kv_heads(),
-                                  Qwen35Config<QWEN35_SIZE>::head_size(),
-                                  Qwen35Config<QWEN35_SIZE>::keys_size(),
-                                  Qwen35Config<QWEN35_SIZE>::values_size());
+  GroupQueryAttention<QWEN35_SIZE>::
+      template sdpa<input_float_t, input_float_t, input_float_t, input_float_t,
+                    input_float_t, compute_t>(
+          query_ptr, keys_cache, values_cache, attn_out, gate_ptr, layer_num,
+          seq_len, stream);
 
   MatrixVectorMultiply::matmul<weight_t, weight_t, input_float_t, hidden_t,
                                compute_t>(

@@ -10,7 +10,7 @@
 #include "../gpu_ops/LayerNorm.cuh"
 #include "../ErrorCheck.h"
 #include "../gpu_ops/RoPE.cuh"
-#include "../gpu_ops/GroupQueryAttention.cuh"
+#include "../gpu_ops/Qwen2GroupQueryAttention.cuh"
 #include "../gpu_ops/SiLUMult.cuh"
 #include "../gpu_ops/GpuFloat.cuh"
 
@@ -149,7 +149,7 @@ public:
 
         compute_t *attention_output_ptr = static_cast<compute_t *>(attention_output->data);
         checkCuda(cudaMemsetAsync(attention_output->data, 0, attention_output->size, stream));
-        GroupQueryAttention<QWEN2_SIZE>::template sdpa<hidden_t, cache_t, cache_t, compute_t, compute_t>(
+        Qwen2GroupQueryAttention<QWEN2_SIZE>::template sdpa<hidden_t, cache_t, cache_t, compute_t, compute_t>(
             queries_ptr, k_cache_ptr, v_cache_ptr, attention_output_ptr, layer_num, seq_len, stream);
 
         const weight_t *o_proj_weight_ptr = static_cast<const weight_t*>(o_proj_weight->data);

@@ -3,6 +3,7 @@
 #include <cuda_bf16.h>
 #include <iostream>
 #include <random>
+#include "../qwen35/Qwen35Types.cuh"
 
 static bool bf16close(__nv_bfloat16 a, __nv_bfloat16 b, float rtol, float atol) {
     float a_f = a;
@@ -45,5 +46,29 @@ static void check_fp32_allclose(float *gpu_vals, float *cpu_vals, int32_t len, f
 static void fill_random_bf16(CudaBuffer &buf, std::normal_distribution<float> &distribution, std::mt19937 &generator) {
     for (size_t i = 0; i < buf.size / sizeof(__nv_bfloat16); i++) {
         static_cast<__nv_bfloat16*>(buf.data)[i] = distribution(generator);
+    }
+}
+
+static bool input_float_close(input_float_t a, input_float_t b) {
+    return a.value == b.value;
+}
+
+static void check_input_float_allclose(input_float_t *gpu_vals, input_float_t *cpu_vals, int32_t len) {
+    bool all_close = true;
+    for (int32_t i = 0; i < len; i++) {
+        if (!input_float_close(gpu_vals[i], cpu_vals[i])) {
+            std::cerr << "difference at index " << i << ": GPU calculated " << normalize_input_float(gpu_vals[i])
+                << ", CPU calculated " << normalize_input_float(cpu_vals[i]) << std::endl;
+            all_close = false;
+        }
+    }
+    if (!all_close) {
+        std::exit(1);
+    }
+}
+
+static void fill_random_input_float(CudaBuffer &buf, std::uniform_int_distribution<int> &distribution, std::mt19937 &generator) {
+    for (size_t i = 0; i < buf.size / sizeof(input_float_t); i++) {
+        static_cast<input_float_t*>(buf.data)[i] = input_float_t{static_cast<int8_t>(distribution(generator))};
     }
 }
