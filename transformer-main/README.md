@@ -26,6 +26,12 @@ internally, we will use `float32` for accumulation within kernels, to minimize u
 For simplicity, all tensors in this implementation will use row-major ordering, i.e. the memory is contiguous along the last dimension.
 However, this layout is not optimal for performance is all cases.
 
+# Model files
+
+By default, the Qwen3.5 loader reads model files from the repo-local `models/Qwen3.5-4B` directory.
+You can still override this with `TRANSFORMER_MODEL_DIR` or, for the Python reference, `--model-dir`.
+The top-level `models/` directory is git-ignored because it contains local checkpoint files.
+
 # Real world LLM inference
 
 This project is missing many features in real-world production LLM inference, such as:

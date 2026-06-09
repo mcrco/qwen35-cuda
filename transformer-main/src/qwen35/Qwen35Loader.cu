@@ -10,7 +10,12 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
+
+#ifndef TRANSFORMER_REPO_ROOT
+#define TRANSFORMER_REPO_ROOT "."
+#endif
 
 Qwen35TensorIndex::Qwen35TensorIndex(const std::string &model_dir) {
     for (const auto &entry : std::filesystem::directory_iterator(model_dir)) {
@@ -117,7 +122,7 @@ std::string Qwen35Loader::get_model_dir() {
     if (model_dir_env) {
         return model_dir_env;
     }
-    return "/home/marco/.cache/huggingface/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a";
+    return std::string(TRANSFORMER_REPO_ROOT) + "/models/Qwen3.5-4B";
 }
 
 static void expect_config_value(const nlohmann::json &cfg, const std::string &name, size_t expected) {

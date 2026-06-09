@@ -74,6 +74,7 @@ add_library(transformer_lib
         )
 
 target_link_libraries(transformer_lib PRIVATE CUDA::cudart CUDA::nvtx3)
+target_compile_definitions(transformer_lib PRIVATE TRANSFORMER_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")
 
 add_executable(transformer
         src/vendor/argparse.hpp

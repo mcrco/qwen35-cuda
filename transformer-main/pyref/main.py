@@ -9,11 +9,7 @@ from qwen35 import Qwen35Model
 
 
 DEFAULT_MODEL_ID = "Qwen/Qwen3.5-4B"
-DEFAULT_CACHE_SNAPSHOT = (
-    Path.home()
-    / ".cache/huggingface/hub/models--Qwen--Qwen3.5-4B/snapshots"
-    / "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
-)
+DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[2] / "models/Qwen3.5-4B"
 
 
 def resolve_model_dir(model_dir_arg: str | None) -> Path:
@@ -24,7 +20,7 @@ def resolve_model_dir(model_dir_arg: str | None) -> Path:
     )
     if model_dir is not None:
         return Path(model_dir).expanduser()
-    return DEFAULT_CACHE_SNAPSHOT
+    return DEFAULT_MODEL_DIR
 
 
 def parse_dtype(dtype_name: str) -> torch.dtype:
