@@ -93,7 +93,7 @@ void test_rope(int32_t num_heads, int32_t head_dim, int32_t rotary_dim, float th
 }
 
 int main() {
-    // Qwen2 0.5B query RoPE shape
+    // Full-head BF16 RoPE coverage
     test_rope<__nv_bfloat16>(14, 64, 64, 1e6f);
     // Qwen3.5 partial RoPE shape
     test_rope<input_float_t>(16, 256, 64, 10000000.0f);

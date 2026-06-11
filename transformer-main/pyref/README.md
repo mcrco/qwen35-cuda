@@ -1,7 +1,6 @@
 # pyref
 
 PyTorch reference implementation of the transformer model.
-[Based on the Hugging Face implementation.](https://github.com/huggingface/transformers/blob/8f1509a96c96747c893051ac947795cfb0750357/src/transformers/models/qwen2/modeling_qwen2.py)
 
 ## Running
 On the cs179 server, run:

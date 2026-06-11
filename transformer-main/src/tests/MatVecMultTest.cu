@@ -4,7 +4,6 @@
 #include <cuda_bf16.h>
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
 #include "../qwen35/Qwen35Types.cuh"
-#include "../qwen2/Qwen2Model.cuh"
 #include "TestUtils.cuh"
 
 void compile_generic_matvec_signatures() {
@@ -13,16 +12,6 @@ void compile_generic_matvec_signatures() {
     const float *hidden_state = nullptr;
     float *out = nullptr;
     MatrixVectorMultiply::matmul<int4_t, float, float, float, float>(1, 1, weights, bias, hidden_state, out, cudaStreamPerThread);
-}
-
-void compile_qwen2_float_hidden_signature() {
-    using Model = Qwen2Model<QWEN2_0_5B, __nv_bfloat16, float, float, float, float>;
-    using Layer = Qwen2Layer<QWEN2_0_5B, __nv_bfloat16, float, float, float>;
-    std::shared_ptr<CudaBuffer> cache;
-    std::shared_ptr<CudaBuffer> hidden;
-    Model model;
-    Layer layer{0, 1};
-    layer.forward(cache, cache, hidden, 1, cudaStreamPerThread);
 }
 
 void test_matvec(int32_t m, int32_t k) {
@@ -70,6 +59,6 @@ void test_matvec(int32_t m, int32_t k) {
 int main() {
     // when debugging, it may be helpful to lower dimensions
     test_matvec(12345, 800);
-    // Qwen2 0.5B hidden projection shape
-    test_matvec(896, 896);
+    // Qwen3.5 0.8B hidden projection shape
+    test_matvec(1024, 1024);
 }

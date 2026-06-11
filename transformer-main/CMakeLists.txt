@@ -19,12 +19,6 @@ add_library(transformer_lib
         src/CudaBuffer.cuh
         src/CudaBuffer.cu
         src/ErrorCheck.h
-        src/qwen2/Qwen2Config.h
-        src/qwen2/Qwen2Layer.cuh
-        src/qwen2/Qwen2Layer.cu
-        src/qwen2/Qwen2Model.cuh
-        src/qwen2/Qwen2Loader.h
-        src/qwen2/Qwen2Loader.cu
         src/qwen35/Qwen35Config.h
         src/qwen35/Qwen35Types.cuh
         src/cpu_ops/BufferOps.cuh
@@ -65,8 +59,6 @@ add_library(transformer_lib
         src/gpu_ops/MatrixVectorMultiply.cuh
         src/gpu_ops/SiLUMult.cu
         src/gpu_ops/SiLUMult.cuh
-        src/gpu_ops/Qwen2GroupQueryAttention.cuh
-        src/gpu_ops/Qwen2GroupQueryAttention.cu
         src/gpu_ops/GroupQueryAttention.cuh
         src/gpu_ops/GroupQueryAttention.cu
         src/gpu_ops/LinearAttention.cuh
@@ -108,10 +100,6 @@ add_test(NAME ropetest COMMAND ropetest)
 add_executable(silumulttest ./src/tests/SiLUMultTest.cu)
 target_link_libraries(silumulttest PRIVATE transformer_lib)
 add_test(NAME silumulttest COMMAND silumulttest)
-
-add_executable(qwen2gqatest ./src/tests/Qwen2GQATest.cu)
-target_link_libraries(qwen2gqatest PRIVATE transformer_lib)
-add_test(NAME qwen2gqatest COMMAND qwen2gqatest)
 
 add_executable(gqatest ./src/tests/GQATest.cu)
 target_link_libraries(gqatest PRIVATE transformer_lib)

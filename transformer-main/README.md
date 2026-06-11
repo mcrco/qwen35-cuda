@@ -6,9 +6,8 @@ Caltech CS179 Transformer Project
 
 I recommend you read [Attention Is All You Need](https://arxiv.org/abs/1706.03762) many times, this paper is critical to all transformer models.
 
-We will be implementing the [Qwen2](https://arxiv.org/pdf/2407.10671) model, an open-weights LLMs.
-Qwen2's architecture is copied from [Meta's Llama](https://arxiv.org/abs/2407.21783), except Qwen2 uses bias in the QKV matrices.
-Both of these architectures implement [grouped-query attention](https://arxiv.org/abs/2305.13245),
+This repository implements Qwen3.5 autoregressive inference.
+The implementation includes [grouped-query attention](https://arxiv.org/abs/2305.13245),
 [layer normalization](https://arxiv.org/abs/1607.06450v1) with zero mean,
 [SwiGLU feed forward networks](https://arxiv.org/abs/2002.05202), and
 [rotary positional embeddings](https://arxiv.org/abs/2104.09864).
@@ -76,7 +75,7 @@ Implement GPU operators:
 - SiLUMult
 
 ### Profiling (10 points)
-Profile all your kernels with `ncu`, with input sizes matching what you'd expect for Qwen2 0.5B.
+Profile all your kernels with `ncu`, with input sizes matching what you'd expect for the configured Qwen3.5 model.
 For each kernel, provide a screenshot and explain something interesting you noticed.
 For example:
 - Explain why your kernel is memory-bandwidth limited, latency/occupancy-limited, compute-limited, or limited by some other overhead.
@@ -111,7 +110,7 @@ For example:
 To submit, zip your repository to `~/lab6_2025_submission.zip`.
 
 ### Question 2.1 (3 points)
-List all the matrix-vector multiplies in a Qwen2 0.5B layer, including the (M, K) dimensions of the matrix.
+List all the matrix-vector multiplies in a transformer layer, including the (M, K) dimensions of the matrix.
 (Do not include grouped-query attention).
 
 First, we have the QKV projections, which are 
@@ -129,19 +128,19 @@ After the self attention layer, there's an MLP with 3 linear layers:
 
 ### Question 2.2 (2 points)
 Treating each query head as a row of a matrix, what are the dimensions of the matrix-matrix multiply in a
-Qwen2 0.5B layer grouped-query attention operation? Assume current sequence length is 1234 tokens.
+grouped-query attention operation? Assume current sequence length is 1234 tokens.
 
 For each query head and kv head pair, we do a (num_query_heads, query_dim) @ (query_dim, 1234) matmul for the attention between the current token's queries and the past tokens keys for the given heads.
 
 ### Question 2.3 (5 points)
 Assuming off-chip memory bandwidth is the limiting factor, what is the theoretical minimum inference latency (in ms)
-for Qwen2 0.5B on an A100-PCIE-40GB, with BF16 weights? Assume small sequence length (i.e. KV cache size is negligible).
+for the configured model on an A100-PCIE-40GB, with BF16 weights? Assume small sequence length (i.e. KV cache size is negligible).
 
 Since at the very least we have to load each of the weights for their corresponding ops e.g. matmuls, we need to load 0.5B * 2 bytes per bf16 = 1B bytes, and the A100-PCIE-40GB memory bandwidth is 1555GB/s, we have that the inference latency is 1 GB/1555 GB/s = 0.64ms.
 
 ### Question 2.4 (5 points)
 Determine the sequence length at which the KV cache becomes non-negligible in terms of performance;
-specifically, at what sequence length in Qwen2 0.5B would the KV cache become 10% the size of the model parameters?
+specifically, at what sequence length would the KV cache become 10% the size of the model parameters?
 
 Assuming that the KV cache and the model params are stored in the same type (e.g. all bf16 or float32), we find that for every token in each layer we need 2 key heads * 64 key dim = 128 floats and 2 value heads * 64 value dim = 128 floats => 256 floats total per token in each layer. Multiplying this by the number of layers (24), we get 24 * 256 = 6144. Then, 0.5B / (6144 * t) = 0.1 => ~8138 tokens.
 
@@ -149,10 +148,10 @@ Assuming that the KV cache and the model params are stored in the same type (e.g
 Complete:
 - GroupQueryAttention
   - Must use online numerically stable softmax, see section 3.1 of [Online normalizer calculation for softmax](https://arxiv.org/pdf/1805.02867)
-- Qwen2Layer
-- Qwen2Model
+- Qwen35Layer
+- Qwen35Model
 
-You should not allocate or free any memory inside `Qwen2Model::forward`;
+You should not allocate or free any memory inside `Qwen35Model::forward`;
 scratch space should be allocated only at model initialization, in constructors.
 
 Test by running `./transformer`, and 100 tokens will be produced, matching the python reference implementation 
