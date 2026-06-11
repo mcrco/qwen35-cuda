@@ -95,6 +95,13 @@ if (NOT TRANSFORMER_GIT_COMMIT)
 endif ()
 target_compile_definitions(qwen35_forward_bench PRIVATE TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}")
 
+add_executable(qwen35_module_bench
+        src/vendor/argparse.hpp
+        src/bench/qwen35_module_bench.cu
+)
+target_link_libraries(qwen35_module_bench PRIVATE transformer_lib CUDA::nvtx3)
+target_compile_definitions(qwen35_module_bench PRIVATE TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}")
+
 # tests
 enable_testing()
 
