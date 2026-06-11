@@ -16,5 +16,5 @@ public:
         }
     }
 
-    static void silu_mult_in_place(input_float_t *x, const input_float_t *y, size_t n);
+    static void silu_mult_in_place(float *x, const float *y, size_t n);
 };

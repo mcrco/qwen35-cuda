@@ -36,9 +36,9 @@ public:
     static void sdpa(const query_t *queries, const key_t *k_cache, const value_t *v_cache, output_t *weighted_values, const gate_t *gate, int32_t layer_num, int32_t token_pos, cudaStream_t stream);
 };
 
-extern template void GroupQueryAttention<QWEN35_0_8B>::sdpa<input_float_t, input_float_t, input_float_t, input_float_t, input_float_t, float>(
-    const input_float_t*, const input_float_t*, const input_float_t*, input_float_t*, const input_float_t*, int32_t, int32_t, cudaStream_t);
-extern template void GroupQueryAttention<QWEN35_4B>::sdpa<input_float_t, input_float_t, input_float_t, input_float_t, input_float_t, float>(
-    const input_float_t*, const input_float_t*, const input_float_t*, input_float_t*, const input_float_t*, int32_t, int32_t, cudaStream_t);
-extern template void GroupQueryAttention<QWEN35_9B>::sdpa<input_float_t, input_float_t, input_float_t, input_float_t, input_float_t, float>(
-    const input_float_t*, const input_float_t*, const input_float_t*, input_float_t*, const input_float_t*, int32_t, int32_t, cudaStream_t);
+extern template void GroupQueryAttention<QWEN35_0_8B>::sdpa<float, float, float, float, float, float>(
+    const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);
+extern template void GroupQueryAttention<QWEN35_4B>::sdpa<float, float, float, float, float, float>(
+    const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);
+extern template void GroupQueryAttention<QWEN35_9B>::sdpa<float, float, float, float, float, float>(
+    const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);

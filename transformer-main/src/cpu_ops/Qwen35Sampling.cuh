@@ -7,5 +7,5 @@
 
 class Qwen35Sampling {
 public:
-    static int32_t sample(const input_float_t *scores, size_t vocab_size, float temperature, std::mt19937 &rng);
+    static int32_t sample(const float *scores, size_t vocab_size, float temperature, std::mt19937 &rng);
 };

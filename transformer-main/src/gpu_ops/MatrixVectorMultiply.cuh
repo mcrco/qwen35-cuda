@@ -26,8 +26,8 @@ public:
         matmul<mat_t, mat_t, vec_t, out_t, compute_t>(m, k, mat, nullptr, vec, out, stream);
     }
 
-    template<typename input_float_t>
-    static void bf16_matmul(int32_t m, int32_t k, const __nv_bfloat16 *mat, const __nv_bfloat16 *bias, const input_float_t *vec, __nv_bfloat16 *out, cudaStream_t stream);
+    template<typename vec_t>
+    static void bf16_matmul(int32_t m, int32_t k, const __nv_bfloat16 *mat, const __nv_bfloat16 *bias, const vec_t *vec, __nv_bfloat16 *out, cudaStream_t stream);
 };
 
 extern template void MatrixVectorMultiply::matmul<__nv_bfloat16, __nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float>(int32_t, int32_t, const __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, __nv_bfloat16*, cudaStream_t);

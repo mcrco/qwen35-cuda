@@ -96,5 +96,5 @@ int main() {
     // Full-head BF16 RoPE coverage
     test_rope<__nv_bfloat16>(14, 64, 64, 1e6f);
     // Qwen3.5 partial RoPE shape
-    test_rope<input_float_t>(16, 256, 64, 10000000.0f);
+    test_rope<float>(16, 256, 64, 10000000.0f);
 }

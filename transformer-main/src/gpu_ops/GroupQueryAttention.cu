@@ -79,9 +79,9 @@ template class GroupQueryAttention<QWEN35_0_8B>;
 template class GroupQueryAttention<QWEN35_4B>;
 template class GroupQueryAttention<QWEN35_9B>;
 
-template void GroupQueryAttention<QWEN35_0_8B>::sdpa<input_float_t, input_float_t, input_float_t, input_float_t, input_float_t, float>(
-    const input_float_t*, const input_float_t*, const input_float_t*, input_float_t*, const input_float_t*, int32_t, int32_t, cudaStream_t);
-template void GroupQueryAttention<QWEN35_4B>::sdpa<input_float_t, input_float_t, input_float_t, input_float_t, input_float_t, float>(
-    const input_float_t*, const input_float_t*, const input_float_t*, input_float_t*, const input_float_t*, int32_t, int32_t, cudaStream_t);
-template void GroupQueryAttention<QWEN35_9B>::sdpa<input_float_t, input_float_t, input_float_t, input_float_t, input_float_t, float>(
-    const input_float_t*, const input_float_t*, const input_float_t*, input_float_t*, const input_float_t*, int32_t, int32_t, cudaStream_t);
+template void GroupQueryAttention<QWEN35_0_8B>::sdpa<float, float, float, float, float, float>(
+    const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);
+template void GroupQueryAttention<QWEN35_4B>::sdpa<float, float, float, float, float, float>(
+    const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);
+template void GroupQueryAttention<QWEN35_9B>::sdpa<float, float, float, float, float, float>(
+    const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);

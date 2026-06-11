@@ -93,7 +93,7 @@ extern template void LayerNorm::zero_centered_rms_norm<float, float, float, floa
     float eps,
     cudaStream_t stream);
 
-extern template void LayerNorm::normalize_gated_hidden_state<float, input_float_t, input_float_t, input_float_t, float>(
+extern template void LayerNorm::normalize_gated_hidden_state<float, float, float, float, float>(
     const std::shared_ptr<CudaBuffer> &hidden_state,
     const std::shared_ptr<CudaBuffer> &gate,
     const std::shared_ptr<CudaBuffer> &output,

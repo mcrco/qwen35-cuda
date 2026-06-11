@@ -29,9 +29,10 @@ __device__ compute_t softplus(compute_t x) {
     return log(static_cast<compute_t>(1) + exp(x));
 }
 
+template<typename hidden_t>
 __global__ void shiftInsertConvStateKernel(
-        const input_float_t *qkv,
-        input_float_t *conv_state,
+        const hidden_t *qkv,
+        hidden_t *conv_state,
         int conv_kernel_dim,
         int conv_size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -45,12 +46,12 @@ __global__ void shiftInsertConvStateKernel(
     }
 }
 
-template<typename compute_t>
+template<typename hidden_t, typename weight_t, typename compute_t>
 __global__ void conv1dSiluKernel(
-        const input_float_t *conv_state,
-        const input_float_t *conv_weight,
-        const input_float_t *conv_bias,
-        input_float_t *mixed_qkv,
+        const hidden_t *conv_state,
+        const weight_t *conv_weight,
+        const weight_t *conv_bias,
+        hidden_t *mixed_qkv,
         int conv_kernel_dim,
         int conv_size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -65,13 +66,13 @@ __global__ void conv1dSiluKernel(
             compute_t weight_val = gpu_ops::read_as<compute_t>(conv_weight[c * conv_kernel_dim + k]);
             sum += state_val * weight_val;
         }
-        mixed_qkv[c] = gpu_ops::write_from<input_float_t>(silu(sum));
+        mixed_qkv[c] = gpu_ops::write_from<hidden_t>(silu(sum));
     }
 }
 
-template<typename compute_t>
+template<typename hidden_t, typename compute_t>
 __global__ void splitQkvKernel(
-        const input_float_t *mixed_qkv,
+        const hidden_t *mixed_qkv,
         float *queries,
         float *keys,
         float *values,
@@ -100,16 +101,16 @@ __global__ void splitQkvKernel(
     }
 }
 
-template<typename compute_t>
+template<typename hidden_t, typename weight_t, typename compute_t>
 __global__ void gatedDeltaUpdateKernel(
-        input_float_t *state,
+        hidden_t *state,
         const float *queries,
         const float *keys,
         const float *values,
-        const input_float_t *beta_raw,
-        const input_float_t *decay_raw,
-        const input_float_t *dt_bias,
-        const input_float_t *A_log,
+        const hidden_t *beta_raw,
+        const hidden_t *decay_raw,
+        const weight_t *dt_bias,
+        const weight_t *A_log,
         float *weighted_values,
         int num_value_heads,
         int key_head_dim,
@@ -131,7 +132,7 @@ __global__ void gatedDeltaUpdateKernel(
         for (int v = 0; v < value_head_dim; v++) {
             int idx = state_head_base + k * value_head_dim + v;
             compute_t decayed = gpu_ops::read_as<compute_t>(state[idx]) * decay_coeff;
-            state[idx] = gpu_ops::write_from<input_float_t>(decayed);
+            state[idx] = gpu_ops::write_from<hidden_t>(decayed);
         }
     }
 
@@ -146,7 +147,7 @@ __global__ void gatedDeltaUpdateKernel(
             int idx = state_head_base + k * value_head_dim + v;
             compute_t updated = gpu_ops::read_as<compute_t>(state[idx]) +
                 static_cast<compute_t>(keys[key_head_base + k]) * delta;
-            state[idx] = gpu_ops::write_from<input_float_t>(updated);
+            state[idx] = gpu_ops::write_from<hidden_t>(updated);
         }
     }
 
@@ -166,30 +167,32 @@ inline int blocks_for(size_t n) {
 
 } // namespace linear_attention_detail
 
+template<typename hidden_t, typename weight_t, typename compute_t>
 void LinearAttention::conv1d_silu(
-        const input_float_t *qkv,
-        input_float_t *conv_state,
-        const input_float_t *conv_weight,
-        const input_float_t *conv_bias,
-        input_float_t *mixed_qkv,
+        const hidden_t *qkv,
+        hidden_t *conv_state,
+        const weight_t *conv_weight,
+        const weight_t *conv_bias,
+        hidden_t *mixed_qkv,
         size_t conv_kernel_dim,
         size_t conv_size,
         cudaStream_t stream) {
     int threads = linear_attention_detail::LINEAR_ATTENTION_THREADS;
     int blocks = linear_attention_detail::blocks_for(conv_kernel_dim * conv_size);
-    linear_attention_detail::shiftInsertConvStateKernel<<<blocks, threads, 0, stream>>>(
+    linear_attention_detail::shiftInsertConvStateKernel<hidden_t><<<blocks, threads, 0, stream>>>(
         qkv, conv_state, static_cast<int>(conv_kernel_dim), static_cast<int>(conv_size));
     checkCuda(cudaGetLastError());
 
     blocks = linear_attention_detail::blocks_for(conv_size);
-    linear_attention_detail::conv1dSiluKernel<float><<<blocks, threads, 0, stream>>>(
+    linear_attention_detail::conv1dSiluKernel<hidden_t, weight_t, compute_t><<<blocks, threads, 0, stream>>>(
         conv_state, conv_weight, conv_bias, mixed_qkv,
         static_cast<int>(conv_kernel_dim), static_cast<int>(conv_size));
     checkCuda(cudaGetLastError());
 }
 
+template<typename hidden_t, typename compute_t>
 void LinearAttention::split_qkv(
-        const input_float_t *mixed_qkv,
+        const hidden_t *mixed_qkv,
         float *queries,
         float *keys,
         float *values,
@@ -200,22 +203,23 @@ void LinearAttention::split_qkv(
         cudaStream_t stream) {
     int threads = linear_attention_detail::LINEAR_ATTENTION_THREADS;
     int blocks = linear_attention_detail::blocks_for(num_value_heads);
-    linear_attention_detail::splitQkvKernel<float><<<blocks, threads, 0, stream>>>(
+    linear_attention_detail::splitQkvKernel<hidden_t, compute_t><<<blocks, threads, 0, stream>>>(
         mixed_qkv, queries, keys, values,
         static_cast<int>(num_key_heads), static_cast<int>(num_value_heads),
         static_cast<int>(key_head_dim), static_cast<int>(value_head_dim));
     checkCuda(cudaGetLastError());
 }
 
+template<typename hidden_t, typename weight_t, typename compute_t>
 void LinearAttention::gated_delta_update(
-        input_float_t *state,
+        hidden_t *state,
         const float *queries,
         const float *keys,
         const float *values,
-        const input_float_t *beta_raw,
-        const input_float_t *decay_raw,
-        const input_float_t *dt_bias,
-        const input_float_t *A_log,
+        const hidden_t *beta_raw,
+        const hidden_t *decay_raw,
+        const weight_t *dt_bias,
+        const weight_t *A_log,
         float *weighted_values,
         size_t num_value_heads,
         size_t key_head_dim,
@@ -223,9 +227,16 @@ void LinearAttention::gated_delta_update(
         cudaStream_t stream) {
     int threads = linear_attention_detail::LINEAR_ATTENTION_THREADS;
     int blocks = linear_attention_detail::blocks_for(num_value_heads);
-    linear_attention_detail::gatedDeltaUpdateKernel<float><<<blocks, threads, 0, stream>>>(
+    linear_attention_detail::gatedDeltaUpdateKernel<hidden_t, weight_t, compute_t><<<blocks, threads, 0, stream>>>(
         state, queries, keys, values, beta_raw, decay_raw, dt_bias, A_log,
         weighted_values, static_cast<int>(num_value_heads),
         static_cast<int>(key_head_dim), static_cast<int>(value_head_dim));
     checkCuda(cudaGetLastError());
 }
+
+template void LinearAttention::conv1d_silu<float, float, float>(
+    const float*, float*, const float*, const float*, float*, size_t, size_t, cudaStream_t);
+template void LinearAttention::split_qkv<float, float>(
+    const float*, float*, float*, float*, size_t, size_t, size_t, size_t, cudaStream_t);
+template void LinearAttention::gated_delta_update<float, float, float>(
+    float*, const float*, const float*, const float*, const float*, const float*, const float*, const float*, float*, size_t, size_t, size_t, cudaStream_t);

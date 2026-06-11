@@ -63,10 +63,9 @@ struct Qwen35Cache {
 
 template<
     Qwen35Size QWEN35_SIZE,
-    typename weight_t = input_float_t,
-    typename hidden_t = input_float_t,
-    typename compute_t = float,
-    typename cache_t = input_float_t>
+    typename weight_t = float,
+    typename hidden_t = float,
+    typename compute_t = float>
 class Qwen35Layer {
 public:
     explicit Qwen35Layer(size_t layer_num);
@@ -92,11 +91,10 @@ protected:
 
 template<
     Qwen35Size QWEN35_SIZE,
-    typename weight_t = input_float_t,
-    typename hidden_t = input_float_t,
-    typename compute_t = float,
-    typename cache_t = input_float_t>
-class Qwen35FullAttnLayer final : public Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t> {
+    typename weight_t = float,
+    typename hidden_t = float,
+    typename compute_t = float>
+class Qwen35FullAttnLayer final : public Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t> {
 public:
     explicit Qwen35FullAttnLayer(size_t layer_num);
 
@@ -114,7 +112,7 @@ public:
     void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream) override;
 
 private:
-    using Base = Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>;
+    using Base = Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t>;
     using Base::layer_num;
     using Base::norm_hidden_state;
     using Base::input_layernorm;
@@ -129,11 +127,10 @@ private:
 
 template<
     Qwen35Size QWEN35_SIZE,
-    typename weight_t = input_float_t,
-    typename hidden_t = input_float_t,
-    typename compute_t = float,
-    typename cache_t = input_float_t>
-class Qwen35LinearAttentionLayer final : public Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t> {
+    typename weight_t = float,
+    typename hidden_t = float,
+    typename compute_t = float>
+class Qwen35LinearAttentionLayer final : public Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t> {
 public:
     explicit Qwen35LinearAttentionLayer(size_t layer_num);
 
@@ -152,7 +149,7 @@ public:
     void forward(Qwen35Cache &cache, const std::shared_ptr<CudaBuffer> &hidden_state, cudaStream_t stream) override;
 
 private:
-    using Base = Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>;
+    using Base = Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t>;
     using Base::layer_num;
     using Base::norm_hidden_state;
     using Base::input_layernorm;

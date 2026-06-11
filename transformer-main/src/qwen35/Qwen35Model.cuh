@@ -13,11 +13,9 @@
 
 template<
     Qwen35Size QWEN35_SIZE,
-    typename weight_t = input_float_t,
-    typename hidden_t = input_float_t,
-    typename compute_t = float,
-    typename cache_t = input_float_t,
-    typename logits_t = input_float_t>
+    typename weight_t = float,
+    typename hidden_t = float,
+    typename compute_t = float>
 class Qwen35Model {
 public:
     Qwen35Model();
@@ -25,7 +23,7 @@ public:
 
     std::shared_ptr<CudaBuffer> embedding_weight;
     std::shared_ptr<CudaBuffer> lm_head_weight;
-    std::vector<std::shared_ptr<Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t, cache_t>>> layers;
+    std::vector<std::shared_ptr<Qwen35Layer<QWEN35_SIZE, weight_t, hidden_t, compute_t>>> layers;
     LayerNorm final_layernorm;
 
     Qwen35Cache allocate_cache(size_t max_seq_len) const;

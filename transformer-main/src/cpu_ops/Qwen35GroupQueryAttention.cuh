@@ -6,11 +6,11 @@
 class Qwen35GroupQueryAttention {
 public:
     static void sdpa(
-        input_float_t *queries,
-        input_float_t *keys_cache,
-        input_float_t *values_cache,
-        input_float_t *weighted_values,
-        input_float_t *gate,
+        float *queries,
+        float *keys_cache,
+        float *values_cache,
+        float *weighted_values,
+        float *gate,
         size_t layer_num,
         size_t seq_len,
         size_t num_layers,

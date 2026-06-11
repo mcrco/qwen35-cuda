@@ -20,26 +20,26 @@ static void apply_partial_rope_to_row(float *row, size_t dim, size_t rotary_dim,
 }
 
 void Qwen35RoPE::apply_partial_rope_to_qk(
-        input_float_t *queries,
+        float *queries,
         size_t num_query_heads,
-        input_float_t *keys,
+        float *keys,
         size_t num_kv_heads,
         size_t head_size,
         size_t rotary_dim,
         size_t position_idx,
         float theta_base) {
-    auto apply = [&] (input_float_t *values, size_t num_heads) {
+    auto apply = [&] (float *values, size_t num_heads) {
         for (size_t h = 0; h < num_heads; h++) {
             float row[256];
             if (head_size > 256) {
                 throw std::runtime_error("Qwen35 CPU RoPE scratch is too small");
             }
             for (size_t d = 0; d < head_size; d++) {
-                row[d] = normalize_input_float(values[h * head_size + d]);
+                row[d] = static_cast<float>(values[h * head_size + d]);
             }
             apply_partial_rope_to_row(row, head_size, rotary_dim, position_idx, theta_base);
             for (size_t d = 0; d < head_size; d++) {
-                values[h * head_size + d] = input_float_from_float(row[d]);
+                values[h * head_size + d] = static_cast<float>(row[d]);
             }
         }
     };

@@ -25,7 +25,7 @@ static void check_bf16_allclose(__nv_bfloat16 *gpu_vals, __nv_bfloat16 *cpu_vals
     }
 }
 
-static bool fp32close(__nv_bfloat16 a, __nv_bfloat16 b, float rtol, float atol) {
+static bool fp32close(float a, float b, float rtol, float atol) {
     return fabsf(a - b) <= atol + rtol * fabsf(b);
 }
 
@@ -49,16 +49,16 @@ static void fill_random_bf16(CudaBuffer &buf, std::normal_distribution<float> &d
     }
 }
 
-static bool input_float_close(input_float_t a, input_float_t b) {
-    return bf16close(a, b, 1e-2f, 1e-4f);
+static bool fp32_storage_close(float a, float b) {
+    return fp32close(a, b, 1e-2f, 1e-4f);
 }
 
-static void check_input_float_allclose(input_float_t *gpu_vals, input_float_t *cpu_vals, int32_t len) {
+static void check_fp32_storage_allclose(float *gpu_vals, float *cpu_vals, int32_t len) {
     bool all_close = true;
     for (int32_t i = 0; i < len; i++) {
-        if (!input_float_close(gpu_vals[i], cpu_vals[i])) {
-            std::cerr << "difference at index " << i << ": GPU calculated " << normalize_input_float(gpu_vals[i])
-                << ", CPU calculated " << normalize_input_float(cpu_vals[i]) << std::endl;
+        if (!fp32_storage_close(gpu_vals[i], cpu_vals[i])) {
+            std::cerr << "difference at index " << i << ": GPU calculated " << static_cast<float>(gpu_vals[i])
+                << ", CPU calculated " << static_cast<float>(cpu_vals[i]) << std::endl;
             all_close = false;
         }
     }
@@ -67,8 +67,8 @@ static void check_input_float_allclose(input_float_t *gpu_vals, input_float_t *c
     }
 }
 
-static void fill_random_input_float(CudaBuffer &buf, std::uniform_int_distribution<int> &distribution, std::mt19937 &generator) {
-    for (size_t i = 0; i < buf.size / sizeof(input_float_t); i++) {
-        static_cast<input_float_t*>(buf.data)[i] = input_float_from_float(static_cast<float>(distribution(generator)) / 16.0f);
+static void fill_random_fp32_storage(CudaBuffer &buf, std::uniform_int_distribution<int> &distribution, std::mt19937 &generator) {
+    for (size_t i = 0; i < buf.size / sizeof(float); i++) {
+        static_cast<float*>(buf.data)[i] = static_cast<float>(distribution(generator)) / 16.0f;
     }
 }
