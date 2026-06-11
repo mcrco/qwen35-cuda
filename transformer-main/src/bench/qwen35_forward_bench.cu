@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -319,6 +320,10 @@ int main(int argc, const char *argv[]) {
         if (args.json_path.empty()) {
             std::cout << output.dump(2) << std::endl;
         } else {
+            std::filesystem::path output_path(args.json_path);
+            if (output_path.has_parent_path()) {
+                std::filesystem::create_directories(output_path.parent_path());
+            }
             std::ofstream out(args.json_path);
             if (!out.good()) {
                 throw std::runtime_error("failed to open JSON output path: " + args.json_path);
