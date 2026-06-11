@@ -35,6 +35,16 @@ Qwen35Cache Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::allocate_ca
 }
 
 template<Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t, typename compute_t>
+void Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::set_seed(uint32_t seed) {
+    rng.seed(seed);
+}
+
+template<Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t, typename compute_t>
+cudaStream_t Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::cuda_stream() const {
+    return stream;
+}
+
+template<Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t, typename compute_t>
 int32_t Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qwen35Cache &cache, int32_t input_tok_id, float temperature) {
     if (input_tok_id < 0 || static_cast<size_t>(input_tok_id) >= Qwen35Config<QWEN35_SIZE>::vocab_size()) {
         throw std::runtime_error("invalid input token id");

@@ -29,6 +29,8 @@ public:
 
     Qwen35Cache allocate_cache(size_t max_seq_len) const;
     int32_t forward(Qwen35Cache &cache, int32_t input_tok_id, float temperature);
+    void set_seed(uint32_t seed);
+    cudaStream_t cuda_stream() const;
 
 private:
     cudaStream_t stream;

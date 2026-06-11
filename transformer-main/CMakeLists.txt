@@ -76,6 +76,23 @@ add_executable(transformer
 )
 target_link_libraries(transformer PRIVATE transformer_lib)
 
+add_executable(qwen35_forward_bench
+        src/vendor/argparse.hpp
+        src/bench/qwen35_forward_bench.cu
+)
+target_link_libraries(qwen35_forward_bench PRIVATE transformer_lib CUDA::nvtx3)
+execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE TRANSFORMER_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+)
+if (NOT TRANSFORMER_GIT_COMMIT)
+    set(TRANSFORMER_GIT_COMMIT "unknown")
+endif ()
+target_compile_definitions(qwen35_forward_bench PRIVATE TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}")
+
 # tests
 enable_testing()
 
