@@ -4,6 +4,15 @@
 #include "../gpu_ops/GpuFloat.cuh"
 #include <cstddef>
 
+/**
+ * Parallelization strategy:
+ * These are elementwise vector operations.
+ * 1. Assign one thread to each output element for copy and zero.
+ * 2. For add_in_place, assign one thread to each residual element and read the
+ *    matching value element. There are no cross-element dependencies.
+ * 3. Use vectorized loads/stores or larger per-thread contiguous chunks when
+ *    memory bandwidth dominates launch overhead.
+ */
 class BufferOps {
 public:
     template<typename src_t, typename dst_t, typename compute_t = float>

@@ -1,11 +1,11 @@
-#include "Qwen35GroupQueryAttention.cuh"
-#include "Qwen35Math.cuh"
+#include "GroupQueryAttention.cuh"
+#include "Math.cuh"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-void Qwen35GroupQueryAttention::sdpa(
+void CpuGroupQueryAttention::sdpa(
         float *queries,
         float *keys_cache,
         float *values_cache,
@@ -53,7 +53,7 @@ void Qwen35GroupQueryAttention::sdpa(
         for (size_t d = 0; d < head_size; d++) {
             size_t idx = qh * head_size + d;
             float v = static_cast<float>(weighted_values[idx]) / denom;
-            v *= qwen35_sigmoid(static_cast<float>(gate[idx]));
+            v *= cpu_sigmoid(static_cast<float>(gate[idx]));
             weighted_values[idx] = static_cast<float>(v);
         }
     }

@@ -1,11 +1,11 @@
-#include "Qwen35Sampling.cuh"
+#include "Sampling.cuh"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
 
-int32_t Qwen35Sampling::sample(const float *scores, size_t vocab_size, float temperature, std::mt19937 &rng) {
+int32_t CpuSampling::sample(const float *scores, size_t vocab_size, float temperature, std::mt19937 &rng) {
     int32_t best_idx = 0;
     float best_score = -std::numeric_limits<float>::infinity();
 

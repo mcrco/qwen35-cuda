@@ -1,4 +1,4 @@
-#include "Qwen35RoPE.cuh"
+#include "RoPE.cuh"
 
 #include <algorithm>
 #include <cmath>
@@ -19,7 +19,7 @@ static void apply_partial_rope_to_row(float *row, size_t dim, size_t rotary_dim,
     }
 }
 
-void Qwen35RoPE::apply_partial_rope_to_qk(
+void CpuRoPE::apply_partial_rope_to_qk(
         float *queries,
         size_t num_query_heads,
         float *keys,
@@ -32,7 +32,7 @@ void Qwen35RoPE::apply_partial_rope_to_qk(
         for (size_t h = 0; h < num_heads; h++) {
             float row[256];
             if (head_size > 256) {
-                throw std::runtime_error("Qwen35 CPU RoPE scratch is too small");
+                throw std::runtime_error("CPU RoPE scratch is too small");
             }
             for (size_t d = 0; d < head_size; d++) {
                 row[d] = static_cast<float>(values[h * head_size + d]);

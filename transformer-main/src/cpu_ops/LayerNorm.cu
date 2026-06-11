@@ -1,14 +1,14 @@
-#include "Qwen35LayerNorm.cuh"
+#include "LayerNorm.cuh"
 
-void Qwen35LayerNorm::zero_centered_rms_norm(const float *weight, const float *input, float *output, size_t n, float eps) {
+void CpuLayerNorm::zero_centered_rms_norm(const float *weight, const float *input, float *output, size_t n, float eps) {
     zero_centered_rms_norm<float, float, float, float>(weight, input, output, n, eps);
 }
 
-void Qwen35LayerNorm::gated_rms_norm(const float *weight, const float *input, const float *gate, float *output, size_t heads, size_t dim, float eps) {
+void CpuLayerNorm::gated_rms_norm(const float *weight, const float *input, const float *gate, float *output, size_t heads, size_t dim, float eps) {
     gated_rms_norm<float, float, float, float, float>(weight, input, gate, output, heads, dim, eps);
 }
 
-void Qwen35LayerNorm::l2norm_rows(float *values, size_t rows, size_t cols, float scale, float eps) {
+void CpuLayerNorm::l2norm_rows(float *values, size_t rows, size_t cols, float scale, float eps) {
     for (size_t r = 0; r < rows; r++) {
         float sum_squares = 0.0f;
         for (size_t c = 0; c < cols; c++) {

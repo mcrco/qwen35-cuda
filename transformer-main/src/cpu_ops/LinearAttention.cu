@@ -1,10 +1,10 @@
-#include "Qwen35LinearAttention.cuh"
+#include "LinearAttention.cuh"
 #include "BufferOps.cuh"
-#include "Qwen35Math.cuh"
+#include "Math.cuh"
 
 #include <cmath>
 
-void Qwen35LinearAttention::conv1d_silu(
+void CpuLinearAttention::conv1d_silu(
         const float *qkv,
         float *conv_state,
         const float *conv_weight,
@@ -22,11 +22,11 @@ void Qwen35LinearAttention::conv1d_silu(
         for (size_t k = 0; k < conv_kernel_dim; k++) {
             sum += static_cast<float>(conv_state[k * conv_size + c]) * static_cast<float>(conv_weight[c * conv_kernel_dim + k]);
         }
-        mixed_qkv[c] = static_cast<float>(qwen35_silu(sum));
+        mixed_qkv[c] = static_cast<float>(cpu_silu(sum));
     }
 }
 
-void Qwen35LinearAttention::split_qkv(
+void CpuLinearAttention::split_qkv(
         const float *mixed_qkv,
         float *queries,
         float *keys,
@@ -49,7 +49,7 @@ void Qwen35LinearAttention::split_qkv(
     }
 }
 
-void Qwen35LinearAttention::gated_delta_update(
+void CpuLinearAttention::gated_delta_update(
         float *state,
         const float *queries,
         const float *keys,
@@ -65,8 +65,8 @@ void Qwen35LinearAttention::gated_delta_update(
     BufferOps::zero_float(weighted_values, num_value_heads * value_head_dim);
 
     for (size_t h = 0; h < num_value_heads; h++) {
-        float beta = qwen35_sigmoid(static_cast<float>(beta_raw[h]));
-        float decay = -std::exp(static_cast<float>(A_log[h])) * qwen35_softplus(static_cast<float>(decay_raw[h]) + static_cast<float>(dt_bias[h]));
+        float beta = cpu_sigmoid(static_cast<float>(beta_raw[h]));
+        float decay = -std::exp(static_cast<float>(A_log[h])) * cpu_softplus(static_cast<float>(decay_raw[h]) + static_cast<float>(dt_bias[h]));
         float decay_coeff = std::exp(decay);
 
         for (size_t k = 0; k < key_head_dim; k++) {

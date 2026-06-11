@@ -23,21 +23,23 @@ add_library(transformer_lib
         src/qwen35/Qwen35Types.cuh
         src/cpu_ops/BufferOps.cuh
         src/cpu_ops/BufferOps.cu
-        src/cpu_ops/Qwen35LayerNorm.cuh
-        src/cpu_ops/Qwen35LayerNorm.cu
-        src/cpu_ops/Qwen35Math.cuh
-        src/cpu_ops/Qwen35MatrixVectorMultiply.cuh
-        src/cpu_ops/Qwen35MatrixVectorMultiply.cu
-        src/cpu_ops/Qwen35SiLUMult.cuh
-        src/cpu_ops/Qwen35SiLUMult.cu
-        src/cpu_ops/Qwen35RoPE.cuh
-        src/cpu_ops/Qwen35RoPE.cu
-        src/cpu_ops/Qwen35GroupQueryAttention.cuh
-        src/cpu_ops/Qwen35GroupQueryAttention.cu
-        src/cpu_ops/Qwen35LinearAttention.cuh
-        src/cpu_ops/Qwen35LinearAttention.cu
-        src/cpu_ops/Qwen35Sampling.cuh
-        src/cpu_ops/Qwen35Sampling.cu
+        src/cpu_ops/ArgMax.cuh
+        src/cpu_ops/ArgMax.cu
+        src/cpu_ops/LayerNorm.cuh
+        src/cpu_ops/LayerNorm.cu
+        src/cpu_ops/Math.cuh
+        src/cpu_ops/MatrixVectorMultiply.cuh
+        src/cpu_ops/MatrixVectorMultiply.cu
+        src/cpu_ops/SiLUMult.cuh
+        src/cpu_ops/SiLUMult.cu
+        src/cpu_ops/RoPE.cuh
+        src/cpu_ops/RoPE.cu
+        src/cpu_ops/GroupQueryAttention.cuh
+        src/cpu_ops/GroupQueryAttention.cu
+        src/cpu_ops/LinearAttention.cuh
+        src/cpu_ops/LinearAttention.cu
+        src/cpu_ops/Sampling.cuh
+        src/cpu_ops/Sampling.cu
         src/qwen35/Qwen35Layer.cuh
         src/qwen35/Qwen35Layer.cu
         src/qwen35/Qwen35Model.cuh

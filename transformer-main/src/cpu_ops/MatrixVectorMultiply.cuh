@@ -4,7 +4,23 @@
 #include "../gpu_ops/GpuFloat.cuh"
 #include <cstddef>
 
-class Qwen35MatrixVectorMultiply {
+/**
+ * Already did this in previous homework, but can still be further optimized.
+ *
+ * Parallelization strategy 1 (from prev homework):
+ * Assign one thread to each matrix row. Each thread computes one output element
+ * by doing the full dot product over k, then adds the optional bias.
+ *
+ * Parallelization strategy 2:
+ * For large k, assign one block to each output row. Threads in the block compute
+ * partial dot products over chunks of k, then reduce those partial sums to one
+ * output value.
+ *
+ * Parallelization strategy 3:
+ * Tile multiple rows per block and keep the input vector tile reused across
+ * those rows. This reduces repeated vector loads when m is large.
+ */
+class CpuMatrixVectorMultiply {
 public:
     template<typename mat_t, typename bias_t, typename vec_t, typename out_t, typename compute_t = float>
     static void matmul(size_t m, size_t k, const mat_t *mat, const bias_t *bias, const vec_t *vec, out_t *out) {

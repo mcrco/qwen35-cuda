@@ -2,11 +2,17 @@
 
 #include "../qwen35/Qwen35Types.cuh"
 #include "../gpu_ops/GpuFloat.cuh"
-#include "Qwen35Math.cuh"
+#include "Math.cuh"
 #include <cstddef>
 #include <cmath>
 
-class Qwen35LayerNorm {
+/**
+ * Parallelization strategy:
+ * Already did this in homework 5. Easy reduction to find the sum of squares,
+ * and then do a vectorized division op over all elements in vector.
+ */
+
+class CpuLayerNorm {
 public:
     template<typename weight_t, typename input_t, typename output_t, typename compute_t = float>
     static void zero_centered_rms_norm(const weight_t *weight, const input_t *input, output_t *output, size_t n, float eps) {
@@ -36,7 +42,7 @@ public:
             compute_t inv_rms = static_cast<compute_t>(1) / static_cast<compute_t>(std::sqrt(static_cast<double>(sum_squares) / static_cast<double>(dim) + eps));
             for (size_t d = 0; d < dim; d++) {
                 compute_t v = gpu_ops::read_as<compute_t>(in_row[d]) * inv_rms * gpu_ops::read_as<compute_t>(weight[d]) *
-                    static_cast<compute_t>(qwen35_silu(static_cast<float>(gpu_ops::read_as<compute_t>(gate_row[d]))));
+                    static_cast<compute_t>(cpu_silu(static_cast<float>(gpu_ops::read_as<compute_t>(gate_row[d]))));
                 out_row[d] = gpu_ops::write_from<output_t>(v);
             }
         }
