@@ -7,6 +7,7 @@
 #include "../CudaBuffer.cuh"
 #include "../gpu_ops/ArgMax.cuh"
 #include "../gpu_ops/LayerNorm.cuh"
+#include "../gpu_ops/Sampling.cuh"
 #include "Qwen35Config.h"
 #include "Qwen35Layer.cuh"
 #include "Qwen35Types.cuh"
@@ -35,5 +36,6 @@ private:
     std::shared_ptr<CudaBuffer> norm_hidden_state;
     std::shared_ptr<CudaBuffer> output_scores;
     ArgMax argmax{Qwen35Config<QWEN35_SIZE>::vocab_size()};
+    Sampling sampling{Qwen35Config<QWEN35_SIZE>::vocab_size()};
     std::mt19937 rng{0};
 };

@@ -1,9 +1,9 @@
 #include "Qwen35Model.cuh"
 
-#include "../cpu_ops/Qwen35Sampling.cuh"
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
 
 #include <stdexcept>
+#include <random>
 
 template<Qwen35Size QWEN35_SIZE, typename weight_t, typename hidden_t, typename compute_t>
 Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::Qwen35Model() {
@@ -71,8 +71,12 @@ int32_t Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qwen35C
         return next_token_idx_cpu;
     }
 
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    int32_t *next_token_idx_gpu = sampling.sample(output_scores, Qwen35Config<QWEN35_SIZE>::vocab_size(), temperature, dist(rng), stream);
+    int32_t next_token_idx_cpu;
+    checkCuda(cudaMemcpyAsync(&next_token_idx_cpu, next_token_idx_gpu, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
     checkCuda(cudaStreamSynchronize(stream));
-    return Qwen35Sampling::sample(static_cast<float *>(output_scores->data), Qwen35Config<QWEN35_SIZE>::vocab_size(), temperature, rng);
+    return next_token_idx_cpu;
 }
 
 template class Qwen35Model<QWEN35_0_8B, float, float, float>;

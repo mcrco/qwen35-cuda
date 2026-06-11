@@ -59,6 +59,8 @@ add_library(transformer_lib
         src/gpu_ops/MatrixVectorMultiply.cuh
         src/gpu_ops/SiLUMult.cu
         src/gpu_ops/SiLUMult.cuh
+        src/gpu_ops/Sampling.cu
+        src/gpu_ops/Sampling.cuh
         src/gpu_ops/GroupQueryAttention.cuh
         src/gpu_ops/GroupQueryAttention.cu
         src/gpu_ops/LinearAttention.cuh
@@ -84,6 +86,10 @@ add_test(NAME bpetest COMMAND bpetest)
 add_executable(argmaxtest ./src/tests/ArgMaxTest.cu)
 target_link_libraries(argmaxtest PRIVATE transformer_lib)
 add_test(NAME argmaxtest COMMAND argmaxtest)
+
+add_executable(samplingtest ./src/tests/SamplingTest.cu)
+target_link_libraries(samplingtest PRIVATE transformer_lib)
+add_test(NAME samplingtest COMMAND samplingtest)
 
 add_executable(matvecmulttest ./src/tests/MatVecMultTest.cu)
 target_link_libraries(matvecmulttest PRIVATE transformer_lib)
