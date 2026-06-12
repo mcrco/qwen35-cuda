@@ -66,7 +66,7 @@ export TRANSFORMER_MODEL_DIR="$PWD/models/Qwen3.5-0.8B"
 This project extends the Qwen 2.5 0.5B implementation so that it can load and
 run Qwen3.5-style models.
 
-The most important new computation is the Gated DeltaNet layer. Instead of
+There were 2 main new computations I did. The first was Flash attention for Qwen 3.5 GQA. The second, and more novel one, was the Gated DeltaNet layer. Instead of
 storing all previous keys and values and doing full softmax attention at every
 layer, the linear-attention layers keep a recurrent state that is updated as
 tokens stream through the model:
@@ -78,7 +78,7 @@ state_t = decay_t * state_{t-1} + step_t * outer(delta_t, key_t)
 output_t = state_t * query_t
 ```
 
-The implementation includes:
+Including the above two, my new implementation includes:
 
 - loading different Qwen3.5 model sizes, currently 0.8B, 4B, and 9B shapes, for both bf16 and float32 (although I didn't do explicit instantions for bf16 since my RTX 2070 Super doesn't support it),
 - a Python reference implementation for Qwen3.5 pieces,
@@ -124,9 +124,11 @@ uv run python main.py --model-dir ../../models/Qwen3.5-0.8B --prompt a --max-new
 ```
 
 The deterministic CUDA path and Python reference should be compared on the same
-checkpoint, dtype, prompt/token stream, and temperature.
+checkpoint, dtype, prompt/token stream, and temperature (example in `img/deterministic.png`, default behavior for Qwen 3.5 4B).
 
-Screenshot placeholder: add screenshot(s) of generated text here.
+[![deterministic.png](img/deterministic.png)](img/deterministic.png)
+
+[![interactive.png](img/interactive.png)](img/interactive.png)
 
 ## Performance Analysis
 
@@ -157,8 +159,7 @@ implementation:
 - flash attention for GQA,
 - block reduction for matrix-vector multiplication.
 
-Nsight Compute screenshot placeholder: add forward-profile screenshots showing
-memory coalescing, bank conflicts, and other kernel details here.
+![CPU vs GPU speedup benchmark](bench-plots/e3ce1845/speedup_e3ce1845.png)
 
 ## Potential Improvements
 
@@ -166,7 +167,7 @@ memory coalescing, bank conflicts, and other kernel details here.
   to reduce launch overhead.
 - Improve matvec tiling.
 - Add a real prefill implementation for multi-token prompts instead of only
-  single-token decoding.
+  single-token decoding (causal sdpa).
 - Add batching, top-k/top-p sampling, and more production-style cache management.
 - Add true quantized weight loading and inference. I was not able to get to this
   within the project time constraints.
