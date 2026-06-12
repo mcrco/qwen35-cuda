@@ -84,18 +84,7 @@ add_executable(qwen35_forward_bench
         src/bench/qwen35_forward_bench.cu
 )
 target_link_libraries(qwen35_forward_bench PRIVATE transformer_lib CUDA::nvtx3)
-execute_process(
-        COMMAND git rev-parse HEAD
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE TRANSFORMER_GIT_COMMIT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-)
-if (NOT TRANSFORMER_GIT_COMMIT)
-    set(TRANSFORMER_GIT_COMMIT "unknown")
-endif ()
 target_compile_definitions(qwen35_forward_bench PRIVATE
-        TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}"
         TRANSFORMER_REPO_ROOT="${TRANSFORMER_REPO_ROOT}")
 
 add_executable(qwen35_module_bench
@@ -104,7 +93,6 @@ add_executable(qwen35_module_bench
 )
 target_link_libraries(qwen35_module_bench PRIVATE transformer_lib CUDA::nvtx3)
 target_compile_definitions(qwen35_module_bench PRIVATE
-        TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}"
         TRANSFORMER_REPO_ROOT="${TRANSFORMER_REPO_ROOT}")
 
 # tests

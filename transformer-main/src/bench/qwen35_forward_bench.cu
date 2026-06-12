@@ -22,10 +22,6 @@
 #include "../vendor/argparse.hpp"
 #include "../vendor/json.hpp"
 
-#ifndef TRANSFORMER_GIT_COMMIT
-#define TRANSFORMER_GIT_COMMIT "unknown"
-#endif
-
 #ifndef TRANSFORMER_REPO_ROOT
 #define TRANSFORMER_REPO_ROOT "."
 #endif
@@ -318,7 +314,7 @@ int main(int argc, const char *argv[]) {
         .default_value(std::string(""));
     program.add_argument("--git-commit")
         .help("Git commit to record in output metadata and filename")
-        .default_value(std::string(TRANSFORMER_GIT_COMMIT));
+        .default_value(std::string("unknown"));
     program.add_argument("--dtype")
         .help("Benchmark dtype config; currently only fp32")
         .default_value(std::string("fp32"));

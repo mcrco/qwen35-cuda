@@ -38,10 +38,6 @@
 #include "../vendor/argparse.hpp"
 #include "../vendor/json.hpp"
 
-#ifndef TRANSFORMER_GIT_COMMIT
-#define TRANSFORMER_GIT_COMMIT "unknown"
-#endif
-
 #ifndef TRANSFORMER_REPO_ROOT
 #define TRANSFORMER_REPO_ROOT "."
 #endif
@@ -560,7 +556,7 @@ int main(int argc, const char *argv[]) {
     program.add_argument("--label").help("Optional run label").default_value(std::string(""));
     program.add_argument("--git-commit")
         .help("Git commit to record in output metadata and filename")
-        .default_value(std::string(TRANSFORMER_GIT_COMMIT));
+        .default_value(std::string("unknown"));
     program.add_argument("--seed").default_value(0).scan<'d', int32_t>();
     program.add_argument("--warmup-iters").default_value(10).scan<'d', int32_t>();
     program.add_argument("--gpu-iters").default_value(100).scan<'d', int32_t>();
