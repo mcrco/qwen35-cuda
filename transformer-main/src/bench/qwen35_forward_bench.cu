@@ -50,6 +50,7 @@ struct BenchArgs {
     std::string prompt;
     std::string json_path;
     std::string label;
+    std::string git_commit;
     std::string dtype;
 };
 
@@ -81,13 +82,13 @@ std::filesystem::path json_output_dir(const std::string &json_path) {
     return path;
 }
 
-std::string short_git_commit() {
-    std::string commit = TRANSFORMER_GIT_COMMIT;
+std::string short_git_commit(const BenchArgs &args) {
+    std::string commit = args.git_commit;
     return commit.substr(0, std::min<size_t>(commit.size(), 12));
 }
 
 std::filesystem::path json_output_path(const BenchArgs &args) {
-    return json_output_dir(args.json_path) / ("forward-" + short_git_commit() + ".json");
+    return json_output_dir(args.json_path) / ("forward-" + short_git_commit(args) + ".json");
 }
 
 void validate_args(const BenchArgs &args) {
@@ -214,7 +215,7 @@ nlohmann::json make_json(const BenchArgs &args, const BenchResult &result) {
         {"timestamp", current_timestamp()},
         {"label", args.label},
         {"git", {
-            {"commit", TRANSFORMER_GIT_COMMIT},
+            {"commit", args.git_commit},
         }},
         {"model", {
             {"name", "qwen35"},
@@ -315,6 +316,9 @@ int main(int argc, const char *argv[]) {
     program.add_argument("--label")
         .help("Optional run label included in JSON output")
         .default_value(std::string(""));
+    program.add_argument("--git-commit")
+        .help("Git commit to record in output metadata and filename")
+        .default_value(std::string(TRANSFORMER_GIT_COMMIT));
     program.add_argument("--dtype")
         .help("Benchmark dtype config; currently only fp32")
         .default_value(std::string("fp32"));
@@ -333,6 +337,7 @@ int main(int argc, const char *argv[]) {
             .prompt = program.get<std::string>("prompt"),
             .json_path = program.get<std::string>("json"),
             .label = program.get<std::string>("label"),
+            .git_commit = program.get<std::string>("git-commit"),
             .dtype = program.get<std::string>("dtype"),
         };
         validate_args(args);

@@ -54,6 +54,7 @@ struct BenchArgs {
     std::string dtype;
     std::string json_path;
     std::string label;
+    std::string git_commit;
     int32_t seed{};
     int32_t warmup_iters{};
     int32_t gpu_iters{};
@@ -110,13 +111,13 @@ std::filesystem::path json_output_dir(const std::string &json_path) {
     return path;
 }
 
-std::string short_git_commit() {
-    std::string commit = TRANSFORMER_GIT_COMMIT;
+std::string short_git_commit(const BenchArgs &args) {
+    std::string commit = args.git_commit;
     return commit.substr(0, std::min<size_t>(commit.size(), 12));
 }
 
 std::filesystem::path json_output_path(const BenchArgs &args) {
-    std::string filename = "module-" + args.module + "-" + short_git_commit() + ".json";
+    std::string filename = "module-" + args.module + "-" + short_git_commit(args) + ".json";
     return json_output_dir(args.json_path) / filename;
 }
 
@@ -513,7 +514,7 @@ nlohmann::json output_json(const BenchArgs &args, const BenchOutput &bench) {
     return {
         {"timestamp", current_timestamp()},
         {"label", args.label},
-        {"git", {{"commit", TRANSFORMER_GIT_COMMIT}}},
+        {"git", {{"commit", args.git_commit}}},
         {"benchmark", {
             {"name", "qwen35_module_bench"},
             {"module", bench.module},
@@ -557,6 +558,9 @@ int main(int argc, const char *argv[]) {
         .help("Output JSON directory")
         .default_value(std::string(TRANSFORMER_REPO_ROOT) + "/bench-results");
     program.add_argument("--label").help("Optional run label").default_value(std::string(""));
+    program.add_argument("--git-commit")
+        .help("Git commit to record in output metadata and filename")
+        .default_value(std::string(TRANSFORMER_GIT_COMMIT));
     program.add_argument("--seed").default_value(0).scan<'d', int32_t>();
     program.add_argument("--warmup-iters").default_value(10).scan<'d', int32_t>();
     program.add_argument("--gpu-iters").default_value(100).scan<'d', int32_t>();
@@ -579,6 +583,7 @@ int main(int argc, const char *argv[]) {
             .dtype = program.get<std::string>("dtype"),
             .json_path = program.get<std::string>("json"),
             .label = program.get<std::string>("label"),
+            .git_commit = program.get<std::string>("git-commit"),
             .seed = program.get<int32_t>("seed"),
             .warmup_iters = program.get<int32_t>("warmup-iters"),
             .gpu_iters = program.get<int32_t>("gpu-iters"),
