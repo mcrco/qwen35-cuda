@@ -109,6 +109,10 @@ def artifact_identity(df: pd.DataFrame) -> str:
     return "unknown"
 
 
+def artifact_out_dir(df: pd.DataFrame, out_dir: Path) -> Path:
+    return out_dir / artifact_identity(df)
+
+
 def save_barplot(
     df: pd.DataFrame,
     *,
@@ -140,25 +144,6 @@ def save_barplot(
     return out_path
 
 
-def save_gqa_seq_plot(df: pd.DataFrame, out_dir: Path) -> Path | None:
-    plot_df = df[(df["module"] == "gqa_sdpa") & df["seq_len"].notna() & df["gpu_us"].notna()].copy()
-    if plot_df.empty:
-        return None
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(10, 5))
-    sns.lineplot(data=plot_df, x="seq_len", y="gpu_us", hue="preset", marker="o", ax=ax)
-    ax.set_title("GQA SDPA GPU time vs sequence length")
-    ax.set_xlabel("Sequence length")
-    ax.set_ylabel("GPU us / iter")
-    fig.tight_layout()
-
-    out_path = out_dir / filename_for("gqa_seq_len.png", df)
-    fig.savefig(out_path, dpi=160)
-    plt.close(fig)
-    return out_path
-
-
 def filename_for(filename: str, df: pd.DataFrame) -> Path:
     path = Path(filename)
     return path.with_name(f"{path.stem}_{artifact_identity(df)}{path.suffix}")
@@ -180,12 +165,12 @@ def write_plot_metadata(df: pd.DataFrame, out_dir: Path, paths: list[Path]) -> P
 
 
 def generate_outputs(df: pd.DataFrame, out_dir: Path) -> list[Path]:
+    out_dir = artifact_out_dir(df, out_dir)
     paths: list[Path] = [write_summary(df, out_dir)]
     for maybe_path in [
         save_barplot(df, y="gpu_us", title="GPU time per iter/token", filename="gpu_time.png", out_dir=out_dir, log_scale=True),
         save_barplot(df, y="speedup", title="CPU/GPU speedup", filename="speedup.png", out_dir=out_dir, log_scale=True),
         save_barplot(df, y="tokens_per_sec", title="Forward tokens/sec", filename="tokens_per_sec.png", out_dir=out_dir),
-        save_gqa_seq_plot(df, out_dir),
     ]:
         if maybe_path is not None:
             paths.append(maybe_path)
