@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
+import matplotlib.ticker as mticker
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -56,13 +58,11 @@ def flatten_result(data: dict[str, Any], path: Path) -> dict[str, Any]:
 
 
 def make_display_label(row: pd.Series) -> str:
-    pieces = [str(row.get("module", "")), str(row.get("preset", ""))]
+    pieces = [str(row.get("module", ""))]
     if pd.notna(row.get("seq_len")):
         pieces.append(f"seq={int(row['seq_len'])}")
     if row.get("label"):
         pieces.append(str(row["label"]))
-    if row.get("git_short"):
-        pieces.append(str(row["git_short"]))
     return " ".join(piece for piece in pieces if piece and piece != "nan")
 
 
@@ -129,6 +129,72 @@ def artifact_out_dir(df: pd.DataFrame, out_dir: Path) -> Path:
     return out_dir / artifact_identity(df)
 
 
+def title_for(title: str, df: pd.DataFrame) -> str:
+    identity = artifact_identity(df)
+    title_pieces: list[str] = []
+    presets = sorted(str(preset) for preset in df["preset"].dropna().unique() if str(preset))
+    if len(presets) == 1:
+        title_pieces.append(presets[0])
+    if identity not in {"unknown", "mixed"}:
+        title_pieces.append(identity)
+    if not title_pieces:
+        return title
+    return f"{title} ({', '.join(title_pieces)})"
+
+
+def log_axis_limit(df: pd.DataFrame, column: str) -> tuple[float, float] | None:
+    values = pd.to_numeric(df[column], errors="coerce").dropna()
+    values = values[values > 0]
+    if values.empty:
+        return None
+
+    lower = 10 ** math.floor(math.log10(values.min()))
+    upper = 10 ** math.ceil(math.log10(values.max()))
+    if values.max() / upper > 0.75:
+        upper *= 10
+    return min(lower, 1.0), max(upper, 1.0)
+
+
+def log_axis_limits(df: pd.DataFrame, columns: list[str]) -> dict[str, tuple[float, float]]:
+    limits: dict[str, tuple[float, float]] = {}
+    for column in columns:
+        limit = log_axis_limit(df, column)
+        if limit is not None:
+            limits[column] = limit
+    return limits
+
+
+def configure_log_x_axis(ax: plt.Axes, xlim: tuple[float, float] | None) -> None:
+    ax.set_xscale("log")
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    ax.xaxis.set_major_locator(mticker.LogLocator(base=10, numticks=20))
+    ax.xaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10))
+    ax.xaxis.set_minor_locator(mticker.LogLocator(base=10, subs=(2, 3, 4, 5, 6, 7, 8, 9), numticks=100))
+    ax.xaxis.set_minor_formatter(mticker.NullFormatter())
+    ax.grid(True, axis="x", which="major", linewidth=0.8)
+    ax.grid(True, axis="x", which="minor", linewidth=0.4, alpha=0.35)
+
+
+def add_bar_value_labels(ax: plt.Axes, values: pd.Series, *, suffix: str = "") -> None:
+    labels = [f"{value:.2f}{suffix}" if pd.notna(value) else "" for value in values]
+    for patch, label in zip(ax.patches, labels):
+        if not label:
+            continue
+        width = patch.get_width()
+        if not math.isfinite(width) or width <= 0:
+            continue
+        ax.annotate(
+            label,
+            xy=(width, patch.get_y() + patch.get_height() / 2),
+            xytext=(4, 0),
+            textcoords="offset points",
+            ha="left",
+            va="center",
+            fontsize=8,
+        )
+
+
 def save_barplot(
     df: pd.DataFrame,
     *,
@@ -137,6 +203,9 @@ def save_barplot(
     filename: str,
     out_dir: Path,
     log_scale: bool = False,
+    xlim: tuple[float, float] | None = None,
+    show_value_labels: bool = False,
+    value_suffix: str = "",
 ) -> Path | None:
     plot_df = df.dropna(subset=[y]).copy()
     if plot_df.empty:
@@ -146,16 +215,18 @@ def save_barplot(
     height = max(4.0, 0.45 * len(plot_df))
     fig, ax = plt.subplots(figsize=(12, height))
     sns.barplot(data=plot_df, x=y, y="display_label", hue="module", dodge=False, ax=ax)
-    ax.set_title(title)
+    ax.set_title(title_for(title, df))
     ax.set_xlabel(y)
     ax.set_ylabel("")
     if log_scale:
-        ax.set_xscale("log")
-    ax.legend(loc="best", title="module")
+        configure_log_x_axis(ax, xlim)
+    if show_value_labels:
+        add_bar_value_labels(ax, plot_df[y], suffix=value_suffix)
+    ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), borderaxespad=0, title="module")
     fig.tight_layout()
 
     out_path = out_dir / filename_for(filename, df)
-    fig.savefig(out_path, dpi=160)
+    fig.savefig(out_path, dpi=160, bbox_inches="tight")
     plt.close(fig)
     return out_path
 
@@ -180,12 +251,30 @@ def write_plot_metadata(df: pd.DataFrame, out_dir: Path, paths: list[Path]) -> P
     return metadata_path
 
 
-def generate_outputs(df: pd.DataFrame, out_dir: Path) -> list[Path]:
+def generate_outputs(df: pd.DataFrame, out_dir: Path, axis_limits: dict[str, tuple[float, float]]) -> list[Path]:
     out_dir = artifact_out_dir(df, out_dir)
     paths: list[Path] = []
     for maybe_path in [
-        save_barplot(df, y="gpu_us", title="GPU time per iter/token", filename="gpu_time.png", out_dir=out_dir, log_scale=True),
-        save_barplot(df, y="speedup", title="CPU/GPU speedup", filename="speedup.png", out_dir=out_dir, log_scale=True),
+        save_barplot(
+            df,
+            y="gpu_us",
+            title="GPU time per iter/token",
+            filename="gpu_time.png",
+            out_dir=out_dir,
+            log_scale=True,
+            xlim=axis_limits.get("gpu_us"),
+        ),
+        save_barplot(
+            df,
+            y="speedup",
+            title="CPU/GPU speedup",
+            filename="speedup.png",
+            out_dir=out_dir,
+            log_scale=True,
+            xlim=axis_limits.get("speedup"),
+            show_value_labels=True,
+            value_suffix="x",
+        ),
         save_barplot(df, y="tokens_per_sec", title="Forward tokens/sec", filename="tokens_per_sec.png", out_dir=out_dir),
     ]:
         if maybe_path is not None:
@@ -194,11 +283,11 @@ def generate_outputs(df: pd.DataFrame, out_dir: Path) -> list[Path]:
     return paths
 
 
-def generate_outputs_by_commit(df: pd.DataFrame, out_dir: Path) -> list[Path]:
+def generate_outputs_by_commit(df: pd.DataFrame, out_dir: Path, axis_limits: dict[str, tuple[float, float]]) -> list[Path]:
     paths: list[Path] = []
     commit_keys = df["git_commit"].fillna("")
     for _, group_df in df.groupby(commit_keys, sort=True):
-        paths.extend(generate_outputs(group_df.copy(), out_dir))
+        paths.extend(generate_outputs(group_df.copy(), out_dir, axis_limits))
     return paths
 
 
@@ -215,8 +304,13 @@ def main() -> int:
 
     sns.set_theme(style="whitegrid", context="notebook")
 
+    all_df = load_results(args.results_dir)
+    if all_df.empty:
+        print(f"No benchmark JSON files found in {args.results_dir}")
+        return 1
+
     processed_input_files = set() if args.replot_all else load_processed_input_files(args.out_dir)
-    df = load_results(args.results_dir, processed_input_files)
+    df = all_df if args.replot_all else load_results(args.results_dir, processed_input_files)
     if df.empty:
         if processed_input_files:
             print(f"No new benchmark JSON files found in {args.results_dir}")
@@ -224,7 +318,8 @@ def main() -> int:
         print(f"No benchmark JSON files found in {args.results_dir}")
         return 1
 
-    paths = generate_outputs_by_commit(df, args.out_dir)
+    axis_limits = log_axis_limits(all_df, ["gpu_us", "speedup"])
+    paths = generate_outputs_by_commit(df, args.out_dir, axis_limits)
     print(df.to_string(index=False))
     print()
     for path in paths:
