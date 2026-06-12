@@ -13,6 +13,7 @@ public:
 
     int32_t max_seq_len{};
     int32_t seq_len{0};
+    float temperature{};
     bool interactive{};
     std::string system_prompt{};
     std::shared_ptr<Qwen35ModelT> model{};
@@ -21,6 +22,7 @@ public:
 
     explicit Qwen35MainRunner(argparse::ArgumentParser &program) {
         this->max_seq_len = program.get<int32_t>("max-seq-len");
+        this->temperature = program.get<float>("temperature");
         this->interactive = program.get<bool>("interactive");
         this->system_prompt = program.get<std::string>("system-prompt");
 
@@ -53,7 +55,7 @@ public:
                 if (this->cache.seq_len >= static_cast<size_t>(this->max_seq_len)) {
                     throw std::runtime_error("max sequence length reached");
                 }
-                uint32_t new_token = this->model->forward(this->cache, latest_token, 0.0f);
+                uint32_t new_token = this->model->forward(this->cache, latest_token, this->temperature);
                 if (new_token == im_end_token) {
                     std::cout << std::endl;
                     break;
@@ -102,12 +104,20 @@ int main(int argc, const char *argv[])
         .help("Ask questions on the command line")
         .flag();
 
+    program.add_argument("--temperature")
+        .help("Sampling temperature for interactive assistant generation; 0 uses argmax")
+        .default_value(1.0f)
+        .scan<'g', float>();
+
     program.add_argument("--system-prompt")
         .help("System message for interactive mode")
         .default_value("You are a helpful assistant.");
 
     try {
         program.parse_args(argc, argv);
+        if (program.get<float>("temperature") < 0.0f) {
+            throw std::runtime_error("--temperature must be non-negative");
+        }
     } catch (const std::exception &err) {
         std::cerr << err.what() << std::endl;
         std::cerr << program;
