@@ -15,6 +15,10 @@ DEFAULT_RESULTS_DIR = Path("bench-results")
 DEFAULT_OUT_DIR = Path("bench-plots")
 
 
+def normalized_path(path: Path) -> str:
+    return str(path.expanduser().resolve(strict=False))
+
+
 def flatten_result(data: dict[str, Any], path: Path) -> dict[str, Any]:
     benchmark = data.get("benchmark", {})
     model = data.get("model", {})
@@ -62,9 +66,28 @@ def make_display_label(row: pd.Series) -> str:
     return " ".join(piece for piece in pieces if piece and piece != "nan")
 
 
-def load_results(results_dir: Path) -> pd.DataFrame:
+def load_processed_input_files(out_dir: Path) -> set[str]:
+    processed: set[str] = set()
+    for path in sorted(out_dir.glob("**/plot_metadata_*.json")):
+        with path.open() as f:
+            metadata = json.load(f)
+        if metadata.get("identity") == "mixed":
+            continue
+        input_files = metadata.get("input_files", [])
+        if not isinstance(input_files, list):
+            continue
+        for input_file in input_files:
+            if isinstance(input_file, str) and input_file:
+                processed.add(normalized_path(Path(input_file)))
+    return processed
+
+
+def load_results(results_dir: Path, processed_input_files: set[str] | None = None) -> pd.DataFrame:
+    processed_input_files = processed_input_files or set()
     rows: list[dict[str, Any]] = []
     for path in sorted(results_dir.glob("*.json")):
+        if normalized_path(path) in processed_input_files:
+            continue
         with path.open() as f:
             data = json.load(f)
         items = data if isinstance(data, list) else [data]
@@ -171,20 +194,37 @@ def generate_outputs(df: pd.DataFrame, out_dir: Path) -> list[Path]:
     return paths
 
 
+def generate_outputs_by_commit(df: pd.DataFrame, out_dir: Path) -> list[Path]:
+    paths: list[Path] = []
+    commit_keys = df["git_commit"].fillna("")
+    for _, group_df in df.groupby(commit_keys, sort=True):
+        paths.extend(generate_outputs(group_df.copy(), out_dir))
+    return paths
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
+    parser.add_argument(
+        "--replot-all",
+        action="store_true",
+        help="Ignore existing plot metadata and regenerate plots for every benchmark JSON file.",
+    )
     args = parser.parse_args()
 
     sns.set_theme(style="whitegrid", context="notebook")
 
-    df = load_results(args.results_dir)
+    processed_input_files = set() if args.replot_all else load_processed_input_files(args.out_dir)
+    df = load_results(args.results_dir, processed_input_files)
     if df.empty:
+        if processed_input_files:
+            print(f"No new benchmark JSON files found in {args.results_dir}")
+            return 0
         print(f"No benchmark JSON files found in {args.results_dir}")
         return 1
 
-    paths = generate_outputs(df, args.out_dir)
+    paths = generate_outputs_by_commit(df, args.out_dir)
     print(df.to_string(index=False))
     print()
     for path in paths:

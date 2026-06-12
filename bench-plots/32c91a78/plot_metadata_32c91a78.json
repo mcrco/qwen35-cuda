@@ -1,0 +1,13 @@
+{
+  "identity": "32c91a78",
+  "commits": [
+    "32c91a7865d33db0512a4ab052a502036e5af4aa"
+  ],
+  "input_files": [
+    "bench-results/module-all-32c91a7865d3.json"
+  ],
+  "artifacts": [
+    "bench-plots/32c91a78/gpu_time_32c91a78.png",
+    "bench-plots/32c91a78/speedup_32c91a78.png"
+  ]
+}
