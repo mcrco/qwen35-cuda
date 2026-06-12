@@ -68,6 +68,15 @@ std::string current_timestamp() {
     return out.str();
 }
 
+std::filesystem::path json_path_with_git_commit(const std::string &json_path) {
+    std::filesystem::path path(json_path);
+    std::filesystem::path parent = path.parent_path();
+    std::string stem = path.stem().string();
+    std::string extension = path.extension().string();
+    std::string filename = stem + "-" + TRANSFORMER_GIT_COMMIT + extension;
+    return parent / filename;
+}
+
 void validate_args(const BenchArgs &args) {
     if (args.dtype != "fp32") {
         throw std::runtime_error("unsupported --dtype value: " + args.dtype + " (only fp32 is supported)");
@@ -320,13 +329,13 @@ int main(int argc, const char *argv[]) {
         if (args.json_path.empty()) {
             std::cout << output.dump(2) << std::endl;
         } else {
-            std::filesystem::path output_path(args.json_path);
+            std::filesystem::path output_path = json_path_with_git_commit(args.json_path);
             if (output_path.has_parent_path()) {
                 std::filesystem::create_directories(output_path.parent_path());
             }
-            std::ofstream out(args.json_path);
+            std::ofstream out(output_path);
             if (!out.good()) {
-                throw std::runtime_error("failed to open JSON output path: " + args.json_path);
+                throw std::runtime_error("failed to open JSON output path: " + output_path.string());
             }
             out << output.dump(2) << std::endl;
         }
