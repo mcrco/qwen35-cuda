@@ -25,6 +25,7 @@ public:
     /**
      * Apply variance correction and scaling factors to hidden state.
      * Storage types may differ from compute_t.
+     * Not actually used anymore in Qwen3.5 (switched to zero-centered).
      * @param hidden_state GPU input
      * @param output Location to write output
      * @param n Number of elements

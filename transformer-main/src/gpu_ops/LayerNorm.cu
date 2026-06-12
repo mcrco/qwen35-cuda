@@ -7,6 +7,13 @@
 namespace layer_norm_detail {
 
 constexpr int LAYERNORM_THREADS = 128;
+
+/*
+ * LayerNorm now uses fused single-kernel implementations below. These old
+ * helpers are kept for reference, but are not used because they require a
+ * reduction launch, stream synchronization, host readback, and a second launch,
+ * which creates a lot of overhead that's not worth it given our single sequence
+ * NTP usecase.
 constexpr int LAYERNORM_MAX_BLOCKS = 1024;
 
 template<typename hidden_t, typename compute_t>
@@ -57,6 +64,75 @@ __global__ void zeroCenteredLayerNormKernel(const hidden_t *hidden_state, const 
     for (int i = idx; i < n; i += stride) {
         compute_t result = gpu_ops::read_as<compute_t>(hidden_state[i]) *
             (static_cast<compute_t>(1) + gpu_ops::read_as<compute_t>(weights[i])) / rms;
+        output[i] = gpu_ops::write_from<output_t>(result);
+    }
+}
+*/
+
+// Assign one block to the vector. Reduce sum of squares, compute inv_rms, then
+// write normalized values.
+template<typename hidden_t, typename weight_t, typename output_t, typename compute_t>
+__global__ void fusedLayerNormKernel(const hidden_t *hidden_state, const weight_t *weights, output_t *output, int n, float eps) {
+    extern __shared__ unsigned char shared[];
+    compute_t *partial_sums = reinterpret_cast<compute_t*>(shared);
+
+    int tidx = threadIdx.x;
+
+    compute_t local_sum = static_cast<compute_t>(0);
+    for (int i = tidx; i < n; i += blockDim.x) {
+        compute_t input = gpu_ops::read_as<compute_t>(hidden_state[i]);
+        local_sum += input * input;
+    }
+
+    partial_sums[tidx] = local_sum;
+    __syncthreads();
+
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tidx < s) {
+            partial_sums[tidx] += partial_sums[tidx + s];
+        }
+        __syncthreads();
+    }
+
+    compute_t inv_rms = static_cast<compute_t>(1) /
+        sqrt(static_cast<double>(partial_sums[0]) / static_cast<double>(n) + static_cast<double>(eps));
+    for (int i = tidx; i < n; i += blockDim.x) {
+        compute_t result = gpu_ops::read_as<compute_t>(hidden_state[i]) *
+            gpu_ops::read_as<compute_t>(weights[i]) *
+            inv_rms;
+        output[i] = gpu_ops::write_from<output_t>(result);
+    }
+}
+
+template<typename hidden_t, typename weight_t, typename output_t, typename compute_t>
+__global__ void fusedZeroCenteredLayerNormKernel(const hidden_t *hidden_state, const weight_t *weights, output_t *output, int n, float eps) {
+    extern __shared__ unsigned char shared[];
+    compute_t *partial_sums = reinterpret_cast<compute_t*>(shared);
+
+    int tidx = threadIdx.x;
+
+    compute_t local_sum = static_cast<compute_t>(0);
+    for (int i = tidx; i < n; i += blockDim.x) {
+        compute_t input = gpu_ops::read_as<compute_t>(hidden_state[i]);
+        local_sum += input * input;
+    }
+
+    partial_sums[tidx] = local_sum;
+    __syncthreads();
+
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tidx < s) {
+            partial_sums[tidx] += partial_sums[tidx + s];
+        }
+        __syncthreads();
+    }
+
+    compute_t inv_rms = static_cast<compute_t>(1) /
+        sqrt(static_cast<double>(partial_sums[0]) / static_cast<double>(n) + static_cast<double>(eps));
+    for (int i = tidx; i < n; i += blockDim.x) {
+        compute_t result = gpu_ops::read_as<compute_t>(hidden_state[i]) *
+            (static_cast<compute_t>(1) + gpu_ops::read_as<compute_t>(weights[i])) *
+            inv_rms;
         output[i] = gpu_ops::write_from<output_t>(result);
     }
 }
@@ -151,22 +227,14 @@ LayerNorm::LayerNorm(int32_t len) {}
 template<typename hidden_t, typename weight_t, typename output_t, typename compute_t>
 void LayerNorm::normalize_hidden_state(const std::shared_ptr<CudaBuffer> &hidden_state, const std::shared_ptr<CudaBuffer> &output, int32_t n, cudaStream_t stream) {
     int threads = layer_norm_detail::LAYERNORM_THREADS;
-    int blocks = min((n + threads - 1) / threads, layer_norm_detail::LAYERNORM_MAX_BLOCKS);
 
     const hidden_t *hidden_state_ptr = static_cast<const hidden_t*>(hidden_state->data);
     output_t *output_ptr = static_cast<output_t*>(output->data);
     const weight_t *weights_ptr = static_cast<const weight_t*>(weights->data);
 
-    auto sum_of_squares_buffer = std::make_shared<CudaBuffer>(sizeof(compute_t));
-    compute_t *sum_of_squares = static_cast<compute_t*>(sum_of_squares_buffer->data);
-    checkCuda(cudaMemsetAsync(sum_of_squares, 0, sizeof(compute_t), stream));
     int shared_mem_size = threads * sizeof(compute_t);
-    layer_norm_detail::sumOfSquaresKernel<hidden_t, compute_t><<<blocks, threads, shared_mem_size, stream>>>(hidden_state_ptr, sum_of_squares, n);
-    checkCuda(cudaGetLastError());
-    checkCuda(cudaStreamSynchronize(stream));
-    compute_t rms = sqrt(static_cast<double>(*sum_of_squares) / n + static_cast<double>(LayerNorm::EPS));
-
-    layer_norm_detail::layerNormKernel<hidden_t, weight_t, output_t, compute_t><<<blocks, threads, 0, stream>>>(hidden_state_ptr, weights_ptr, rms, output_ptr, n);
+    layer_norm_detail::fusedLayerNormKernel<hidden_t, weight_t, output_t, compute_t><<<1, threads, shared_mem_size, stream>>>(
+        hidden_state_ptr, weights_ptr, output_ptr, n, LayerNorm::EPS);
     checkCuda(cudaGetLastError());
 }
 
@@ -183,20 +251,12 @@ void LayerNorm::zero_centered_rms_norm(const std::shared_ptr<CudaBuffer> &hidden
 template<typename hidden_t, typename weight_t, typename output_t, typename compute_t>
 void LayerNorm::zero_centered_rms_norm(const hidden_t *hidden_state_ptr, output_t *output_ptr, int32_t n, float eps, cudaStream_t stream) {
     int threads = layer_norm_detail::LAYERNORM_THREADS;
-    int blocks = min((n + threads - 1) / threads, layer_norm_detail::LAYERNORM_MAX_BLOCKS);
 
     const weight_t *weights_ptr = static_cast<const weight_t*>(weights->data);
 
-    auto sum_of_squares_buffer = std::make_shared<CudaBuffer>(sizeof(compute_t));
-    compute_t *sum_of_squares = static_cast<compute_t*>(sum_of_squares_buffer->data);
-    checkCuda(cudaMemsetAsync(sum_of_squares, 0, sizeof(compute_t), stream));
     int shared_mem_size = threads * sizeof(compute_t);
-    layer_norm_detail::sumOfSquaresKernel<hidden_t, compute_t><<<blocks, threads, shared_mem_size, stream>>>(hidden_state_ptr, sum_of_squares, n);
-    checkCuda(cudaGetLastError());
-    checkCuda(cudaStreamSynchronize(stream));
-    compute_t rms = sqrt(static_cast<double>(*sum_of_squares) / n + static_cast<double>(eps));
-
-    layer_norm_detail::zeroCenteredLayerNormKernel<hidden_t, weight_t, output_t, compute_t><<<blocks, threads, 0, stream>>>(hidden_state_ptr, weights_ptr, rms, output_ptr, n);
+    layer_norm_detail::fusedZeroCenteredLayerNormKernel<hidden_t, weight_t, output_t, compute_t><<<1, threads, shared_mem_size, stream>>>(
+        hidden_state_ptr, weights_ptr, output_ptr, n, eps);
     checkCuda(cudaGetLastError());
 }
 
@@ -229,6 +289,8 @@ void LayerNorm::normalize_hidden_state(const std::shared_ptr<CudaBuffer> &hidden
     int n = hidden_state->size / sizeof(__nv_bfloat16);
     normalize_hidden_state<__nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float>(hidden_state, output, n, stream);
 }
+
+// Explicit instantiations below.
 
 template void LayerNorm::normalize_hidden_state<__nv_bfloat16, __nv_bfloat16, __nv_bfloat16, float>(
     const std::shared_ptr<CudaBuffer> &hidden_state,
