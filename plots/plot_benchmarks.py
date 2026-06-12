@@ -93,13 +93,6 @@ def load_results(results_dir: Path) -> pd.DataFrame:
     return df
 
 
-def write_summary(df: pd.DataFrame, out_dir: Path) -> Path:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = out_dir / f"benchmark_summary_{artifact_identity(df)}.csv"
-    df.to_csv(summary_path, index=False)
-    return summary_path
-
-
 def artifact_identity(df: pd.DataFrame) -> str:
     commits = sorted(str(commit) for commit in df["git_commit"].dropna().unique() if str(commit))
     if len(commits) == 1:
@@ -166,7 +159,7 @@ def write_plot_metadata(df: pd.DataFrame, out_dir: Path, paths: list[Path]) -> P
 
 def generate_outputs(df: pd.DataFrame, out_dir: Path) -> list[Path]:
     out_dir = artifact_out_dir(df, out_dir)
-    paths: list[Path] = [write_summary(df, out_dir)]
+    paths: list[Path] = []
     for maybe_path in [
         save_barplot(df, y="gpu_us", title="GPU time per iter/token", filename="gpu_time.png", out_dir=out_dir, log_scale=True),
         save_barplot(df, y="speedup", title="CPU/GPU speedup", filename="speedup.png", out_dir=out_dir, log_scale=True),
