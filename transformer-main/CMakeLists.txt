@@ -129,3 +129,7 @@ add_test(NAME silumulttest COMMAND silumulttest)
 add_executable(gqatest ./src/tests/GQATest.cu)
 target_link_libraries(gqatest PRIVATE transformer_lib)
 add_test(NAME gqatest COMMAND gqatest)
+
+add_executable(linearattentiontest ./src/tests/LinearAttentionTest.cu)
+target_link_libraries(linearattentiontest PRIVATE transformer_lib)
+add_test(NAME linearattentiontest COMMAND linearattentiontest)

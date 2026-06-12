@@ -211,6 +211,20 @@ void fill_random(std::vector<float> &values, std::mt19937 &rng) {
     }
 }
 
+void l2_norm_rows(std::vector<float> &values, int32_t rows, int32_t cols, float scale, float eps) {
+    for (int32_t row = 0; row < rows; row++) {
+        float sum = 0.0f;
+        for (int32_t col = 0; col < cols; col++) {
+            float value = values[row * cols + col];
+            sum += value * value;
+        }
+        float coeff = scale / std::sqrt(sum + eps);
+        for (int32_t col = 0; col < cols; col++) {
+            values[row * cols + col] *= coeff;
+        }
+    }
+}
+
 void copy_to_cuda(const std::vector<float> &src, CudaBuffer &dst) {
     std::copy(src.begin(), src.end(), static_cast<float *>(dst.data));
     int device = 0;
@@ -402,6 +416,9 @@ BenchOutput bench_linear_attention(const BenchArgs &args, const Shape &shape) {
         CpuLinearAttention::split_qkv(mixed_qkv.data(), queries.data(), keys.data(), values.data(),
                                       shape.linear_num_key_heads, shape.linear_num_value_heads,
                                       shape.linear_key_head_dim, shape.linear_value_head_dim);
+        l2_norm_rows(queries, shape.linear_num_value_heads, shape.linear_key_head_dim,
+                     1.0f / std::sqrt(static_cast<float>(shape.linear_key_head_dim)), 1e-6f);
+        l2_norm_rows(keys, shape.linear_num_value_heads, shape.linear_key_head_dim, 1.0f, 1e-6f);
         CpuLinearAttention::gated_delta_update(cpu_state.data(), queries.data(), keys.data(), values.data(),
                                                beta_raw.data(), decay_raw.data(), dt_bias.data(), a_log.data(),
                                                weighted_values.data(), shape.linear_num_value_heads,
@@ -412,6 +429,9 @@ BenchOutput bench_linear_attention(const BenchArgs &args, const Shape &shape) {
             static_cast<float *>(d_qkv.data), static_cast<float *>(d_conv_state.data),
             static_cast<float *>(d_conv_weight.data), static_cast<float *>(d_conv_bias.data),
             static_cast<float *>(d_mixed_qkv.data), conv_kernel_dim, conv_size, cudaStreamPerThread);
+        LinearAttention::normalize_mixed_qk<float, float>(
+            static_cast<float *>(d_mixed_qkv.data), shape.linear_num_key_heads,
+            shape.linear_key_head_dim, cudaStreamPerThread);
         LinearAttention::gated_delta_update<float, float, float>(
             static_cast<float *>(d_state.data), static_cast<float *>(d_mixed_qkv.data),
             static_cast<float *>(d_beta_raw.data), static_cast<float *>(d_decay_raw.data),
