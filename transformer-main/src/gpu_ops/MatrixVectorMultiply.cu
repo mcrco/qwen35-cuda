@@ -4,23 +4,39 @@
 
 namespace matrix_vector_multiply_detail {
 
-constexpr int MATMUL_THREADS = 128;
-constexpr int MATMUL_MAX_BLOCKS = 1024;
+constexpr int MATMUL_THREADS = 256;
 
+// Block reduction parallelized across each row.
 template <typename mat_t, typename bias_t, typename vec_t, typename out_t, typename compute_t>
 __global__ void matrixVectorMultiplyKernel(const mat_t *mat, const bias_t *bias, const vec_t *vec, out_t *out, int m, int k) {
-    int idx = threadIdx.x + blockDim.x * blockIdx.x;
-    int stride = blockDim.x * gridDim.x;
+    extern __shared__ unsigned char shared_mem[];
+    auto partials = reinterpret_cast<compute_t *>(shared_mem);
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+    if (row >= m) {
+        return;
+    }
 
-    for (int i = idx; i < m; i += stride) {
-        compute_t sum = static_cast<compute_t>(0);
-        for (int j = 0; j < k; j++) {
-            compute_t mval = gpu_ops::read_as<compute_t>(mat[i * k + j]);
-            compute_t vval = gpu_ops::read_as<compute_t>(vec[j]);
-            sum += mval * vval;
+    compute_t sum = static_cast<compute_t>(0);
+    for (int col = tid; col < k; col += blockDim.x) {
+        compute_t mval = gpu_ops::read_as<compute_t>(mat[row * k + col]);
+        compute_t vval = gpu_ops::read_as<compute_t>(vec[col]);
+        sum += mval * vval;
+    }
+
+    partials[tid] = sum;
+    __syncthreads();
+
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            partials[tid] += partials[tid + stride];
         }
-        compute_t bval = bias == nullptr ? static_cast<compute_t>(0) : gpu_ops::read_as<compute_t>(bias[i]);
-        out[i] = gpu_ops::write_from<out_t>(sum + bval);
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        compute_t bval = bias == nullptr ? static_cast<compute_t>(0) : gpu_ops::read_as<compute_t>(bias[row]);
+        out[row] = gpu_ops::write_from<out_t>(partials[0] + bval);
     }
 }
 
@@ -28,10 +44,15 @@ __global__ void matrixVectorMultiplyKernel(const mat_t *mat, const bias_t *bias,
 
 template<typename mat_t, typename bias_t, typename vec_t, typename out_t, typename compute_t>
 void MatrixVectorMultiply::matmul(int32_t m, int32_t k, const mat_t *mat, const bias_t *bias, const vec_t *vec, out_t *out, cudaStream_t stream) {
-    int threads = matrix_vector_multiply_detail::MATMUL_THREADS;
-    int blocks = min((m + threads - 1) / threads, matrix_vector_multiply_detail::MATMUL_MAX_BLOCKS);
+    if (m <= 0) {
+        return;
+    }
 
-    matrix_vector_multiply_detail::matrixVectorMultiplyKernel<mat_t, bias_t, vec_t, out_t, compute_t><<<blocks, threads, 0, stream>>>(mat, bias, vec, out, m, k);
+    int threads = matrix_vector_multiply_detail::MATMUL_THREADS;
+    int blocks = m;
+    size_t shared_bytes = static_cast<size_t>(threads) * sizeof(compute_t);
+
+    matrix_vector_multiply_detail::matrixVectorMultiplyKernel<mat_t, bias_t, vec_t, out_t, compute_t><<<blocks, threads, shared_bytes, stream>>>(mat, bias, vec, out, m, k);
     checkCuda(cudaGetLastError());
 }
 
