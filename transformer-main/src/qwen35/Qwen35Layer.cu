@@ -211,12 +211,6 @@ Qwen35LinearAttentionLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t>::Qwen35Li
       sizeof(hidden_t));
   mixed_qkv = std::make_shared<CudaBuffer>(
       Qwen35Config<QWEN35_SIZE>::linear_conv_size() * sizeof(hidden_t));
-  queries_float = std::make_shared<CudaBuffer>(
-      Qwen35Config<QWEN35_SIZE>::linear_values_size() * sizeof(float));
-  keys_float = std::make_shared<CudaBuffer>(
-      Qwen35Config<QWEN35_SIZE>::linear_values_size() * sizeof(float));
-  values_float = std::make_shared<CudaBuffer>(
-      Qwen35Config<QWEN35_SIZE>::linear_values_size() * sizeof(float));
   weighted_values_float = std::make_shared<CudaBuffer>(
       Qwen35Config<QWEN35_SIZE>::linear_values_size() * sizeof(float));
   gated_weighted_values = std::make_shared<CudaBuffer>(
@@ -284,23 +278,9 @@ void Qwen35LinearAttentionLayer<
       Qwen35Config<QWEN35_SIZE>::linear_conv_kernel_dim(),
       Qwen35Config<QWEN35_SIZE>::linear_conv_size(), stream);
 
-  auto qf = static_cast<float *>(queries_float->data);
-  auto kf = static_cast<float *>(keys_float->data);
-  auto vf = static_cast<float *>(values_float->data);
-  LinearAttention::split_qkv<hidden_t, compute_t>(
-      mixed, qf, kf, vf, Qwen35Config<QWEN35_SIZE>::linear_num_key_heads(),
-      Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
-      Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
-      Qwen35Config<QWEN35_SIZE>::linear_value_head_dim(), stream);
-  LayerNorm::l2_norm_rows<float, compute_t>(
-      queries_float, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
-      Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
-      1.0f / std::sqrt(static_cast<float>(
-                 Qwen35Config<QWEN35_SIZE>::linear_key_head_dim())),
-      1e-6f, stream);
-  LayerNorm::l2_norm_rows<float, compute_t>(
-      keys_float, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
-      Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(), 1.0f, 1e-6f, stream);
+  LinearAttention::normalize_mixed_qk<hidden_t, compute_t>(
+      mixed, Qwen35Config<QWEN35_SIZE>::linear_num_key_heads(),
+      Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(), stream);
   checkCuda(cudaStreamSynchronize(stream));
 
   auto state = static_cast<hidden_t *>(cache.recurrent_states->data) +
@@ -311,8 +291,9 @@ void Qwen35LinearAttentionLayer<
   auto dt_bias_ptr = static_cast<weight_t *>(dt_bias->data);
   auto a_log_ptr = static_cast<weight_t *>(A_log->data);
   LinearAttention::gated_delta_update<hidden_t, weight_t, compute_t>(
-      state, qf, kf, vf, beta_raw_ptr, decay_raw_ptr, dt_bias_ptr, a_log_ptr,
-      weighted, Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
+      state, mixed, beta_raw_ptr, decay_raw_ptr, dt_bias_ptr, a_log_ptr,
+      weighted, Qwen35Config<QWEN35_SIZE>::linear_num_key_heads(),
+      Qwen35Config<QWEN35_SIZE>::linear_num_value_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(),
       Qwen35Config<QWEN35_SIZE>::linear_value_head_dim(), stream);
 

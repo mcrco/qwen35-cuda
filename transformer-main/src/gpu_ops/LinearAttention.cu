@@ -38,6 +38,7 @@ __global__ void shiftInsertConvStateKernel(
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     int stride = blockDim.x * gridDim.x;
 
+    // Assign each thread to shift and insert one or more convolution channels.
     for (int c = idx; c < conv_size; c += stride) {
         for (int k = 0; k + 1 < conv_kernel_dim; k++) {
             conv_state[k * conv_size + c] = conv_state[(k + 1) * conv_size + c];
@@ -57,10 +58,12 @@ __global__ void conv1dSiluKernel(
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     int stride = blockDim.x * gridDim.x;
 
+    // Assign each thread to compute one or more depthwise conv outputs.
     for (int c = idx; c < conv_size; c += stride) {
         compute_t sum = conv_bias == nullptr
             ? static_cast<compute_t>(0)
             : gpu_ops::read_as<compute_t>(conv_bias[c]);
+        // Sum over the rolling convolution window for this channel.
         for (int k = 0; k < conv_kernel_dim; k++) {
             compute_t state_val = gpu_ops::read_as<compute_t>(conv_state[k * conv_size + c]);
             compute_t weight_val = gpu_ops::read_as<compute_t>(conv_weight[c * conv_kernel_dim + k]);
@@ -80,6 +83,7 @@ __global__ void splitQkvKernel(
         int num_value_heads,
         int key_head_dim,
         int value_head_dim) {
+    // Assign each thread to split one value head.
     int vh = threadIdx.x + blockIdx.x * blockDim.x;
     int group_size = num_value_heads / num_key_heads;
     int keys_size = num_key_heads * key_head_dim;
@@ -89,33 +93,80 @@ __global__ void splitQkvKernel(
     }
 
     int kh = vh / group_size;
+    // Copy the grouped query/key head into the per-value-head layout.
     for (int d = 0; d < key_head_dim; d++) {
         queries[vh * key_head_dim + d] =
             gpu_ops::read_as<compute_t>(mixed_qkv[kh * key_head_dim + d]);
         keys[vh * key_head_dim + d] =
             gpu_ops::read_as<compute_t>(mixed_qkv[keys_size + kh * key_head_dim + d]);
     }
+    // Copy the value head.
     for (int d = 0; d < value_head_dim; d++) {
         values[vh * value_head_dim + d] =
             gpu_ops::read_as<compute_t>(mixed_qkv[2 * keys_size + vh * value_head_dim + d]);
     }
 }
 
+template<typename hidden_t, typename compute_t>
+__global__ void normalizeMixedQkKernel(
+        hidden_t *mixed_qkv,
+        int num_key_heads,
+        int key_head_dim) {
+    extern __shared__ compute_t partial_sums[];
+
+    // Assign each block to one query or key row in mixed_qkv.
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+    int keys_size = num_key_heads * key_head_dim;
+    bool is_key = row >= num_key_heads;
+    int head = is_key ? row - num_key_heads : row;
+    int base = (is_key ? keys_size : 0) + head * key_head_dim;
+
+    compute_t local_sum = static_cast<compute_t>(0);
+    for (int d = tid; d < key_head_dim; d += blockDim.x) {
+        compute_t value = gpu_ops::read_as<compute_t>(mixed_qkv[base + d]);
+        local_sum += value * value;
+    }
+    partial_sums[tid] = local_sum;
+    __syncthreads();
+
+    // Reduce row sum of squares.
+    for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
+        if (tid < stride) {
+            partial_sums[tid] += partial_sums[tid + stride];
+        }
+        __syncthreads();
+    }
+
+    compute_t scale = is_key
+        ? static_cast<compute_t>(1)
+        : rsqrt(static_cast<compute_t>(key_head_dim));
+    compute_t coeff = scale / sqrt(static_cast<double>(partial_sums[0]) + 1.0e-6);
+    for (int d = tid; d < key_head_dim; d += blockDim.x) {
+        compute_t result = gpu_ops::read_as<compute_t>(mixed_qkv[base + d]) * coeff;
+        mixed_qkv[base + d] = gpu_ops::write_from<hidden_t>(result);
+    }
+}
+
 template<typename hidden_t, typename weight_t, typename compute_t>
 __global__ void gatedDeltaUpdateKernel(
         hidden_t *state,
-        const float *queries,
-        const float *keys,
-        const float *values,
+        const hidden_t *mixed_qkv,
         const hidden_t *beta_raw,
         const hidden_t *decay_raw,
         const weight_t *dt_bias,
         const weight_t *A_log,
         float *weighted_values,
+        int num_key_heads,
         int num_value_heads,
         int key_head_dim,
         int value_head_dim) {
-    int h = threadIdx.x + blockIdx.x * blockDim.x;
+    extern __shared__ compute_t scratch[];
+
+    // Assign each block to one (value_head, value_dim) state column.
+    int hv = blockIdx.x;
+    int h = hv / value_head_dim;
+    int v = hv - h * value_head_dim;
     if (h >= num_value_heads) {
         return;
     }
@@ -125,39 +176,58 @@ __global__ void gatedDeltaUpdateKernel(
         softplus(gpu_ops::read_as<compute_t>(decay_raw[h]) + gpu_ops::read_as<compute_t>(dt_bias[h]));
     compute_t decay_coeff = exp(decay);
     int state_head_base = h * key_head_dim * value_head_dim;
-    int key_head_base = h * key_head_dim;
     int value_head_base = h * value_head_dim;
+    int group_size = num_value_heads / num_key_heads;
+    int kh = h / group_size;
+    int keys_size = num_key_heads * key_head_dim;
+    int query_base = kh * key_head_dim;
+    int key_base = keys_size + kh * key_head_dim;
+    int value_base = 2 * keys_size + h * value_head_dim;
 
-    for (int k = 0; k < key_head_dim; k++) {
-        for (int v = 0; v < value_head_dim; v++) {
-            int idx = state_head_base + k * value_head_dim + v;
-            compute_t decayed = gpu_ops::read_as<compute_t>(state[idx]) * decay_coeff;
-            state[idx] = gpu_ops::write_from<hidden_t>(decayed);
+    // Compute predicted[h, v] with a block-level reduction over key dimension.
+    compute_t predicted_partial = static_cast<compute_t>(0);
+    for (int k = threadIdx.x; k < key_head_dim; k += blockDim.x) {
+        int idx = state_head_base + k * value_head_dim + v;
+        compute_t decayed = gpu_ops::read_as<compute_t>(state[idx]) * decay_coeff;
+        compute_t key = gpu_ops::read_as<compute_t>(mixed_qkv[key_base + k]);
+        predicted_partial += decayed * key;
+    }
+    scratch[threadIdx.x] = predicted_partial;
+    __syncthreads();
+
+    for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
+        if (threadIdx.x < stride) {
+            scratch[threadIdx.x] += scratch[threadIdx.x + stride];
         }
+        __syncthreads();
     }
 
-    for (int v = 0; v < value_head_dim; v++) {
-        compute_t predicted = static_cast<compute_t>(0);
-        for (int k = 0; k < key_head_dim; k++) {
-            int idx = state_head_base + k * value_head_dim + v;
-            predicted += gpu_ops::read_as<compute_t>(state[idx]) * static_cast<compute_t>(keys[key_head_base + k]);
+    compute_t value = gpu_ops::read_as<compute_t>(mixed_qkv[value_base + v]);
+    compute_t delta = (value - scratch[0]) * beta;
+    compute_t out_partial = static_cast<compute_t>(0);
+    // Update the state column and compute weighted_values partials in one pass over k.
+    for (int k = threadIdx.x; k < key_head_dim; k += blockDim.x) {
+        int idx = state_head_base + k * value_head_dim + v;
+        compute_t key = gpu_ops::read_as<compute_t>(mixed_qkv[key_base + k]);
+        compute_t query = gpu_ops::read_as<compute_t>(mixed_qkv[query_base + k]);
+        compute_t decayed = gpu_ops::read_as<compute_t>(state[idx]) * decay_coeff;
+        compute_t updated = decayed + key * delta;
+        state[idx] = gpu_ops::write_from<hidden_t>(updated);
+        out_partial += updated * query;
+    }
+    scratch[threadIdx.x] = out_partial;
+    __syncthreads();
+
+    // Reduce weighted_values partials across key dimension.
+    for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
+        if (threadIdx.x < stride) {
+            scratch[threadIdx.x] += scratch[threadIdx.x + stride];
         }
-        compute_t delta = (static_cast<compute_t>(values[value_head_base + v]) - predicted) * beta;
-        for (int k = 0; k < key_head_dim; k++) {
-            int idx = state_head_base + k * value_head_dim + v;
-            compute_t updated = gpu_ops::read_as<compute_t>(state[idx]) +
-                static_cast<compute_t>(keys[key_head_base + k]) * delta;
-            state[idx] = gpu_ops::write_from<hidden_t>(updated);
-        }
+        __syncthreads();
     }
 
-    for (int v = 0; v < value_head_dim; v++) {
-        compute_t out = static_cast<compute_t>(0);
-        for (int k = 0; k < key_head_dim; k++) {
-            int idx = state_head_base + k * value_head_dim + v;
-            out += gpu_ops::read_as<compute_t>(state[idx]) * static_cast<compute_t>(queries[key_head_base + k]);
-        }
-        weighted_values[value_head_base + v] = static_cast<float>(out);
+    if (threadIdx.x == 0) {
+        weighted_values[value_head_base + v] = static_cast<float>(scratch[0]);
     }
 }
 
@@ -179,10 +249,12 @@ void LinearAttention::conv1d_silu(
         cudaStream_t stream) {
     int threads = linear_attention_detail::LINEAR_ATTENTION_THREADS;
     int blocks = linear_attention_detail::blocks_for(conv_kernel_dim * conv_size);
+    // Shift the convolution state and insert the current qkv vector.
     linear_attention_detail::shiftInsertConvStateKernel<hidden_t><<<blocks, threads, 0, stream>>>(
         qkv, conv_state, static_cast<int>(conv_kernel_dim), static_cast<int>(conv_size));
     checkCuda(cudaGetLastError());
 
+    // Apply depthwise conv and SiLU to produce mixed qkv.
     blocks = linear_attention_detail::blocks_for(conv_size);
     linear_attention_detail::conv1dSiluKernel<hidden_t, weight_t, compute_t><<<blocks, threads, 0, stream>>>(
         conv_state, conv_weight, conv_bias, mixed_qkv,
@@ -203,6 +275,7 @@ void LinearAttention::split_qkv(
         cudaStream_t stream) {
     int threads = linear_attention_detail::LINEAR_ATTENTION_THREADS;
     int blocks = linear_attention_detail::blocks_for(num_value_heads);
+    // Expand grouped query/key heads and split values out of mixed qkv.
     linear_attention_detail::splitQkvKernel<hidden_t, compute_t><<<blocks, threads, 0, stream>>>(
         mixed_qkv, queries, keys, values,
         static_cast<int>(num_key_heads), static_cast<int>(num_value_heads),
@@ -210,26 +283,42 @@ void LinearAttention::split_qkv(
     checkCuda(cudaGetLastError());
 }
 
+template<typename hidden_t, typename compute_t>
+void LinearAttention::normalize_mixed_qk(
+        hidden_t *mixed_qkv,
+        size_t num_key_heads,
+        size_t key_head_dim,
+        cudaStream_t stream) {
+    int threads = linear_attention_detail::LINEAR_ATTENTION_THREADS;
+    int blocks = static_cast<int>(2 * num_key_heads);
+    size_t shared_bytes = static_cast<size_t>(threads) * sizeof(compute_t);
+    // Normalize query rows with 1/sqrt(d) scaling and key rows without extra scaling.
+    linear_attention_detail::normalizeMixedQkKernel<hidden_t, compute_t><<<blocks, threads, shared_bytes, stream>>>(
+        mixed_qkv, static_cast<int>(num_key_heads), static_cast<int>(key_head_dim));
+    checkCuda(cudaGetLastError());
+}
+
 template<typename hidden_t, typename weight_t, typename compute_t>
 void LinearAttention::gated_delta_update(
         hidden_t *state,
-        const float *queries,
-        const float *keys,
-        const float *values,
+        const hidden_t *mixed_qkv,
         const hidden_t *beta_raw,
         const hidden_t *decay_raw,
         const weight_t *dt_bias,
         const weight_t *A_log,
         float *weighted_values,
+        size_t num_key_heads,
         size_t num_value_heads,
         size_t key_head_dim,
         size_t value_head_dim,
         cudaStream_t stream) {
     int threads = linear_attention_detail::LINEAR_ATTENTION_THREADS;
-    int blocks = linear_attention_detail::blocks_for(num_value_heads);
-    linear_attention_detail::gatedDeltaUpdateKernel<hidden_t, weight_t, compute_t><<<blocks, threads, 0, stream>>>(
-        state, queries, keys, values, beta_raw, decay_raw, dt_bias, A_log,
-        weighted_values, static_cast<int>(num_value_heads),
+    int blocks = static_cast<int>(num_value_heads * value_head_dim);
+    size_t shared_bytes = static_cast<size_t>(threads) * sizeof(compute_t);
+    // Fuse decay, delta update, and output reduction per (value_head, value_dim).
+    linear_attention_detail::gatedDeltaUpdateKernel<hidden_t, weight_t, compute_t><<<blocks, threads, shared_bytes, stream>>>(
+        state, mixed_qkv, beta_raw, decay_raw, dt_bias, A_log,
+        weighted_values, static_cast<int>(num_key_heads), static_cast<int>(num_value_heads),
         static_cast<int>(key_head_dim), static_cast<int>(value_head_dim));
     checkCuda(cudaGetLastError());
 }
@@ -238,5 +327,7 @@ template void LinearAttention::conv1d_silu<float, float, float>(
     const float*, float*, const float*, const float*, float*, size_t, size_t, cudaStream_t);
 template void LinearAttention::split_qkv<float, float>(
     const float*, float*, float*, float*, size_t, size_t, size_t, size_t, cudaStream_t);
+template void LinearAttention::normalize_mixed_qk<float, float>(
+    float*, size_t, size_t, cudaStream_t);
 template void LinearAttention::gated_delta_update<float, float, float>(
-    float*, const float*, const float*, const float*, const float*, const float*, const float*, const float*, float*, size_t, size_t, size_t, cudaStream_t);
+    float*, const float*, const float*, const float*, const float*, const float*, float*, size_t, size_t, size_t, size_t, cudaStream_t);

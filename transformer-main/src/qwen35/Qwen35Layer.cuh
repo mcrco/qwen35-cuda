@@ -160,9 +160,6 @@ private:
     std::shared_ptr<CudaBuffer> beta_raw;
     std::shared_ptr<CudaBuffer> decay_raw;
     std::shared_ptr<CudaBuffer> mixed_qkv;
-    std::shared_ptr<CudaBuffer> queries_float;
-    std::shared_ptr<CudaBuffer> keys_float;
-    std::shared_ptr<CudaBuffer> values_float;
     std::shared_ptr<CudaBuffer> weighted_values_float;
     std::shared_ptr<CudaBuffer> gated_weighted_values;
     std::shared_ptr<CudaBuffer> attention_proj;

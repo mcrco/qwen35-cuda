@@ -23,6 +23,7 @@
 #include "../cpu_ops/ArgMax.cuh"
 #include "../cpu_ops/GroupQueryAttention.cuh"
 #include "../cpu_ops/LayerNorm.cuh"
+#include "../cpu_ops/LinearAttention.cuh"
 #include "../cpu_ops/MatrixVectorMultiply.cuh"
 #include "../cpu_ops/RoPE.cuh"
 #include "../cpu_ops/Sampling.cuh"
@@ -30,6 +31,7 @@
 #include "../gpu_ops/ArgMax.cuh"
 #include "../gpu_ops/GroupQueryAttention.cuh"
 #include "../gpu_ops/LayerNorm.cuh"
+#include "../gpu_ops/LinearAttention.cuh"
 #include "../gpu_ops/MatrixVectorMultiply.cuh"
 #include "../gpu_ops/RoPE.cuh"
 #include "../gpu_ops/Sampling.cuh"
@@ -77,6 +79,14 @@ struct Shape {
     int32_t queries_size{};
     int32_t keys_size{};
     int32_t values_size{};
+    int32_t linear_num_key_heads{};
+    int32_t linear_num_value_heads{};
+    int32_t linear_key_head_dim{};
+    int32_t linear_value_head_dim{};
+    int32_t linear_conv_kernel_dim{};
+    int32_t linear_keys_size{};
+    int32_t linear_values_size{};
+    int32_t linear_conv_size{};
     float rope_theta_base{};
     float rms_norm_eps{};
 };
@@ -131,6 +141,14 @@ Shape shape_for() {
         .queries_size = static_cast<int32_t>(Config::queries_size()),
         .keys_size = static_cast<int32_t>(Config::keys_size()),
         .values_size = static_cast<int32_t>(Config::values_size()),
+        .linear_num_key_heads = static_cast<int32_t>(Config::linear_num_key_heads()),
+        .linear_num_value_heads = static_cast<int32_t>(Config::linear_num_value_heads()),
+        .linear_key_head_dim = static_cast<int32_t>(Config::linear_key_head_dim()),
+        .linear_value_head_dim = static_cast<int32_t>(Config::linear_value_head_dim()),
+        .linear_conv_kernel_dim = static_cast<int32_t>(Config::linear_conv_kernel_dim()),
+        .linear_keys_size = static_cast<int32_t>(Config::linear_keys_size()),
+        .linear_values_size = static_cast<int32_t>(Config::linear_values_size()),
+        .linear_conv_size = static_cast<int32_t>(Config::linear_conv_size()),
         .rope_theta_base = Config::rope_theta_base(),
         .rms_norm_eps = Config::rms_norm_eps(),
     };
@@ -307,6 +325,99 @@ BenchOutput bench_matvec(const BenchArgs &args, const Shape &shape) {
         MatrixVectorMultiply::matmul<float, float, float, float, float>(
             m, k, static_cast<float *>(d_mat.data), static_cast<float *>(d_bias.data), static_cast<float *>(d_vec.data),
             static_cast<float *>(d_out.data), cudaStreamPerThread);
+    });
+    return out;
+}
+
+BenchOutput bench_linear_attention(const BenchArgs &args, const Shape &shape) {
+    size_t conv_kernel_dim = static_cast<size_t>(shape.linear_conv_kernel_dim);
+    size_t conv_size = static_cast<size_t>(shape.linear_conv_size);
+    size_t linear_values_size = static_cast<size_t>(shape.linear_values_size);
+    size_t recurrent_state_size = static_cast<size_t>(shape.linear_num_value_heads) *
+                                  shape.linear_key_head_dim * shape.linear_value_head_dim;
+
+    std::mt19937 rng(args.seed);
+    std::vector<float> qkv(conv_size);
+    std::vector<float> conv_state(conv_kernel_dim * conv_size);
+    std::vector<float> conv_weight(conv_size * conv_kernel_dim);
+    std::vector<float> conv_bias(conv_size);
+    std::vector<float> mixed_qkv(conv_size);
+    std::vector<float> queries(linear_values_size);
+    std::vector<float> keys(linear_values_size);
+    std::vector<float> values(linear_values_size);
+    std::vector<float> beta_raw(shape.linear_num_value_heads);
+    std::vector<float> decay_raw(shape.linear_num_value_heads);
+    std::vector<float> dt_bias(shape.linear_num_value_heads);
+    std::vector<float> a_log(shape.linear_num_value_heads);
+    std::vector<float> state(recurrent_state_size);
+    std::vector<float> weighted_values(linear_values_size);
+
+    fill_random(qkv, rng);
+    fill_random(conv_state, rng);
+    fill_random(conv_weight, rng);
+    fill_random(conv_bias, rng);
+    fill_random(beta_raw, rng);
+    fill_random(decay_raw, rng);
+    fill_random(dt_bias, rng);
+    fill_random(a_log, rng);
+    fill_random(state, rng);
+
+    std::vector<float> cpu_conv_state = conv_state;
+    std::vector<float> cpu_state = state;
+
+    CudaBuffer d_qkv(qkv.size() * sizeof(float));
+    CudaBuffer d_conv_state(conv_state.size() * sizeof(float));
+    CudaBuffer d_conv_weight(conv_weight.size() * sizeof(float));
+    CudaBuffer d_conv_bias(conv_bias.size() * sizeof(float));
+    CudaBuffer d_mixed_qkv(mixed_qkv.size() * sizeof(float));
+    CudaBuffer d_beta_raw(beta_raw.size() * sizeof(float));
+    CudaBuffer d_decay_raw(decay_raw.size() * sizeof(float));
+    CudaBuffer d_dt_bias(dt_bias.size() * sizeof(float));
+    CudaBuffer d_a_log(a_log.size() * sizeof(float));
+    CudaBuffer d_state(state.size() * sizeof(float));
+    CudaBuffer d_weighted_values(weighted_values.size() * sizeof(float));
+
+    copy_to_cuda(qkv, d_qkv);
+    copy_to_cuda(conv_state, d_conv_state);
+    copy_to_cuda(conv_weight, d_conv_weight);
+    copy_to_cuda(conv_bias, d_conv_bias);
+    copy_to_cuda(beta_raw, d_beta_raw);
+    copy_to_cuda(decay_raw, d_decay_raw);
+    copy_to_cuda(dt_bias, d_dt_bias);
+    copy_to_cuda(a_log, d_a_log);
+    copy_to_cuda(state, d_state);
+
+    BenchOutput out;
+    out.module = "linear_attention";
+    out.shapes = {{"num_key_heads", shape.linear_num_key_heads},
+                  {"num_value_heads", shape.linear_num_value_heads},
+                  {"key_head_dim", shape.linear_key_head_dim},
+                  {"value_head_dim", shape.linear_value_head_dim},
+                  {"conv_kernel_dim", shape.linear_conv_kernel_dim},
+                  {"conv_size", shape.linear_conv_size},
+                  {"recurrent_state_size", recurrent_state_size}};
+    out.cpu_total_us = time_cpu(args.cpu_iters, [&] {
+        CpuLinearAttention::conv1d_silu(qkv.data(), cpu_conv_state.data(), conv_weight.data(), conv_bias.data(),
+                                        mixed_qkv.data(), conv_kernel_dim, conv_size);
+        CpuLinearAttention::split_qkv(mixed_qkv.data(), queries.data(), keys.data(), values.data(),
+                                      shape.linear_num_key_heads, shape.linear_num_value_heads,
+                                      shape.linear_key_head_dim, shape.linear_value_head_dim);
+        CpuLinearAttention::gated_delta_update(cpu_state.data(), queries.data(), keys.data(), values.data(),
+                                               beta_raw.data(), decay_raw.data(), dt_bias.data(), a_log.data(),
+                                               weighted_values.data(), shape.linear_num_value_heads,
+                                               shape.linear_key_head_dim, shape.linear_value_head_dim);
+    });
+    out.gpu_total_us = time_gpu(args.warmup_iters, args.gpu_iters, "linear_attention", [&] {
+        LinearAttention::conv1d_silu<float, float, float>(
+            static_cast<float *>(d_qkv.data), static_cast<float *>(d_conv_state.data),
+            static_cast<float *>(d_conv_weight.data), static_cast<float *>(d_conv_bias.data),
+            static_cast<float *>(d_mixed_qkv.data), conv_kernel_dim, conv_size, cudaStreamPerThread);
+        LinearAttention::gated_delta_update<float, float, float>(
+            static_cast<float *>(d_state.data), static_cast<float *>(d_mixed_qkv.data),
+            static_cast<float *>(d_beta_raw.data), static_cast<float *>(d_decay_raw.data),
+            static_cast<float *>(d_dt_bias.data), static_cast<float *>(d_a_log.data),
+            static_cast<float *>(d_weighted_values.data), shape.linear_num_key_heads, shape.linear_num_value_heads,
+            shape.linear_key_head_dim, shape.linear_value_head_dim, cudaStreamPerThread);
     });
     return out;
 }
@@ -489,6 +600,7 @@ BenchOutput bench_sampling(const BenchArgs &args, const Shape &) {
 BenchOutput dispatch_one(const BenchArgs &args, const std::string &module) {
     Shape shape = shape_for_preset(args.preset);
     if (module == "matvec") return bench_matvec(args, shape);
+    if (module == "linear_attention") return bench_linear_attention(args, shape);
     if (module == "zero_centered_rms_norm" || module == "gated_rms_norm" || module == "l2_norm_rows") {
         return bench_layernorm(args, shape, module);
     }
@@ -599,7 +711,7 @@ int main(int argc, const char *argv[]) {
         std::vector<std::string> modules;
         if (args.module == "all") {
             modules = {"matvec", "zero_centered_rms_norm", "gated_rms_norm", "l2_norm_rows",
-                       "silu_mult", "rope", "argmax", "sampling", "gqa_sdpa"};
+                       "silu_mult", "rope", "argmax", "sampling", "gqa_sdpa", "linear_attention"};
         } else {
             modules = {args.module};
         }
