@@ -8,6 +8,7 @@
 namespace sampling_detail {
 
 constexpr int32_t THREADS = 256;
+constexpr int32_t PREFIX_THREADS = 1024;
 
 // Need max kernels for 2-pass numerically stable softmax.
 // This kernel gets the max (logit / temperature) in each block.
@@ -61,7 +62,7 @@ __global__ void reduceMaxKernel(const float *block_maxes, float *global_max, int
     }
 }
 
-// Sums probabilities for CDF.
+// Sums unnormalized probabilities (softmax numerators) for CDF.
 __global__ void blockSumKernel(const float *scores, float *block_sums, int32_t n, float temperature, const float *global_max) {
     extern __shared__ float partial_sums[];
 
@@ -88,52 +89,98 @@ __global__ void blockSumKernel(const float *scores, float *block_sums, int32_t n
     }
 }
 
+// Parallelized reduction for block sums (softmax denoms), prefix sums (CDF), and total sum (softmax denom).
+// Also gets the block containing the sampled token based on CDF.
 __global__ void prefixAndSelectBlockKernel(const float *block_sums, float *block_prefix_sums, float *total_sum,
                                            int32_t *selected_block, int32_t num_blocks, float uniform01) {
-    if (threadIdx.x != 0) {
-        return;
+    __shared__ float prefix[PREFIX_THREADS];
+    __shared__ int32_t candidates[PREFIX_THREADS];
+
+    int32_t tidx = threadIdx.x;
+    float value = tidx < num_blocks ? block_sums[tidx] : 0.0f;
+    prefix[tidx] = value;
+    __syncthreads();
+
+    // Upsweep for prefix sum.
+    for (int32_t offset = 1; offset < blockDim.x; offset <<= 1) {
+        float addend = tidx >= offset ? prefix[tidx - offset] : 0.0f;
+        __syncthreads();
+        prefix[tidx] += addend;
+        __syncthreads();
     }
 
-    float total = 0.0f;
-    for (int32_t i = 0; i < num_blocks; i++) {
-        block_prefix_sums[i] = total;
-        total += block_sums[i];
+    // Get exclusive prefix sum.
+    float exclusive_prefix = prefix[tidx] - value;
+    if (tidx < num_blocks) {
+        block_prefix_sums[tidx] = exclusive_prefix;
     }
 
-    *total_sum = total;
+    // Get total unnormalized probability sum.
+    float total = prefix[blockDim.x - 1];
+    if (tidx == 0) {
+        *total_sum = total;
+    }
+    // Sample random point in CDF.
     float sample = uniform01 * total;
-    int32_t selected = num_blocks - 1;
-    for (int32_t i = 0; i < num_blocks; i++) {
-        if (sample <= block_prefix_sums[i] + block_sums[i]) {
-            selected = i;
-            break;
+    // Get all blocks that are past sample point.
+    candidates[tidx] = (tidx < num_blocks && sample <= prefix[tidx]) ? tidx : num_blocks - 1;
+    __syncthreads();
+
+    // Downsweep reduction to get first block past sample point (must contain desired token).
+    for (int32_t stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tidx < stride) {
+            candidates[tidx] = min(candidates[tidx], candidates[tidx + stride]);
         }
+        __syncthreads();
     }
-    *selected_block = selected;
+
+    if (tidx == 0) {
+        *selected_block = candidates[0];
+    }
 }
 
+// Gets the exact token from with in a sampled block.
 __global__ void sampleWithinBlockKernel(const float *scores, const float *block_prefix_sums, const float *total_sum,
                                         const int32_t *selected_block, int32_t *result, int32_t n,
                                         float temperature, const float *global_max, float uniform01) {
-    if (threadIdx.x != 0) {
-        return;
-    }
+    __shared__ float prefix[THREADS];
+    __shared__ int32_t candidates[THREADS];
 
+    int32_t tidx = threadIdx.x;
     int32_t block = *selected_block;
     int32_t start = block * THREADS;
-    int32_t end = min(start + THREADS, n);
+    int32_t idx = start + tidx;
     float sample = uniform01 * *total_sum;
-    float cdf = block_prefix_sums[block];
+    float base_cdf = block_prefix_sums[block];
 
-    for (int32_t i = start; i < end; i++) {
-        cdf += expf(scores[i] / temperature - *global_max);
-        if (sample <= cdf) {
-            *result = i;
-            return;
-        }
+    // Compute softmax numerator.
+    prefix[tidx] = idx < n ? expf(scores[idx] / temperature - *global_max) : 0.0f;
+    __syncthreads();
+
+    // Upsweep for prefix sum.
+    for (int32_t offset = 1; offset < blockDim.x; offset <<= 1) {
+        float addend = tidx >= offset ? prefix[tidx - offset] : 0.0f;
+        __syncthreads();
+        prefix[tidx] += addend;
+        __syncthreads();
     }
 
-    *result = n - 1;
+    // Same thing as before, use prefix sum to find all tokens past sampled point on CDF.
+    float cdf = base_cdf + prefix[tidx];
+    candidates[tidx] = (idx < n && sample <= cdf) ? idx : n - 1;
+    __syncthreads();
+
+    // Downsweep to find sampled token.
+    for (int32_t stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tidx < stride) {
+            candidates[tidx] = min(candidates[tidx], candidates[tidx + stride]);
+        }
+        __syncthreads();
+    }
+
+    if (tidx == 0) {
+        *result = candidates[0];
+    }
 }
 
 } // namespace sampling_detail
@@ -156,26 +203,35 @@ int32_t *Sampling::sample(const std::shared_ptr<CudaBuffer> &scores_buffer, int3
 
     const float *scores = static_cast<const float *>(scores_buffer->data);
     int32_t num_blocks = (n + CHUNK_SIZE - 1) / CHUNK_SIZE;
+    if (num_blocks > sampling_detail::PREFIX_THREADS) {
+        throw std::runtime_error("sampling length exceeds parallel prefix capacity");
+    }
     int32_t shared_mem_size = CHUNK_SIZE * sizeof(float);
 
+    // Get local block max logits for numerically stable softmax.
     sampling_detail::blockMaxKernel<<<num_blocks, CHUNK_SIZE, shared_mem_size, stream>>>(
         scores, static_cast<float *>(block_maxes->data), n, temperature);
     checkCuda(cudaGetLastError());
 
+    // Get global max logit.
     sampling_detail::reduceMaxKernel<<<1, sampling_detail::THREADS, sampling_detail::THREADS * sizeof(float), stream>>>(
         static_cast<const float *>(block_maxes->data), static_cast<float *>(global_max->data), num_blocks);
     checkCuda(cudaGetLastError());
 
+    // Get local block softmax denominators.
     sampling_detail::blockSumKernel<<<num_blocks, CHUNK_SIZE, shared_mem_size, stream>>>(
         scores, static_cast<float *>(block_sums->data), n, temperature, static_cast<const float *>(global_max->data));
     checkCuda(cudaGetLastError());
 
-    sampling_detail::prefixAndSelectBlockKernel<<<1, 1, 0, stream>>>(
+    // Compute block sums, inclusive/exclusive prefix sums, and total sum.
+    // Also samples a chunk.
+    sampling_detail::prefixAndSelectBlockKernel<<<1, sampling_detail::PREFIX_THREADS, 0, stream>>>(
         static_cast<const float *>(block_sums->data), static_cast<float *>(block_prefix_sums->data),
         static_cast<float *>(total_sum->data), static_cast<int32_t *>(selected_block->data), num_blocks, uniform01);
     checkCuda(cudaGetLastError());
 
-    sampling_detail::sampleWithinBlockKernel<<<1, 1, 0, stream>>>(
+    // Find sampled token within sampled chunk.
+    sampling_detail::sampleWithinBlockKernel<<<1, sampling_detail::THREADS, 0, stream>>>(
         scores, static_cast<const float *>(block_prefix_sums->data), static_cast<const float *>(total_sum->data),
         static_cast<const int32_t *>(selected_block->data), static_cast<int32_t *>(result->data), n,
         temperature, static_cast<const float *>(global_max->data), uniform01);
