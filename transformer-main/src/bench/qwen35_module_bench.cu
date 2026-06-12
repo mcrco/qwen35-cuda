@@ -42,6 +42,10 @@
 #define TRANSFORMER_GIT_COMMIT "unknown"
 #endif
 
+#ifndef TRANSFORMER_REPO_ROOT
+#define TRANSFORMER_REPO_ROOT "."
+#endif
+
 namespace {
 
 struct BenchArgs {
@@ -98,13 +102,22 @@ std::string current_timestamp() {
     return out.str();
 }
 
-std::filesystem::path json_path_with_git_commit(const std::string &json_path) {
+std::filesystem::path json_output_dir(const std::string &json_path) {
     std::filesystem::path path(json_path);
-    std::filesystem::path parent = path.parent_path();
-    std::string stem = path.stem().string();
-    std::string extension = path.extension().string();
-    std::string filename = stem + "-" + TRANSFORMER_GIT_COMMIT + extension;
-    return parent / filename;
+    if (path.has_extension()) {
+        return path.parent_path();
+    }
+    return path;
+}
+
+std::string short_git_commit() {
+    std::string commit = TRANSFORMER_GIT_COMMIT;
+    return commit.substr(0, std::min<size_t>(commit.size(), 12));
+}
+
+std::filesystem::path json_output_path(const BenchArgs &args) {
+    std::string filename = "module-" + args.module + "-" + short_git_commit() + ".json";
+    return json_output_dir(args.json_path) / filename;
 }
 
 template<Qwen35Size QWEN35_SIZE>
@@ -540,7 +553,9 @@ int main(int argc, const char *argv[]) {
     program.add_argument("--module").help("Module to benchmark, or all").default_value(std::string("matvec"));
     program.add_argument("--preset").help("qwen35-0.8b, qwen35-4b, or qwen35-9b").default_value(std::string("qwen35-4b"));
     program.add_argument("--dtype").help("Currently only fp32").default_value(std::string("fp32"));
-    program.add_argument("--json").help("Output JSON path; stdout when omitted").default_value(std::string(""));
+    program.add_argument("--json")
+        .help("Output JSON directory")
+        .default_value(std::string(TRANSFORMER_REPO_ROOT) + "/bench-results");
     program.add_argument("--label").help("Optional run label").default_value(std::string(""));
     program.add_argument("--seed").default_value(0).scan<'d', int32_t>();
     program.add_argument("--warmup-iters").default_value(10).scan<'d', int32_t>();
@@ -601,7 +616,7 @@ int main(int argc, const char *argv[]) {
         if (args.json_path.empty()) {
             std::cout << output.dump(2) << std::endl;
         } else {
-            std::filesystem::path output_path = json_path_with_git_commit(args.json_path);
+            std::filesystem::path output_path = json_output_path(args);
             if (output_path.has_parent_path()) {
                 std::filesystem::create_directories(output_path.parent_path());
             }

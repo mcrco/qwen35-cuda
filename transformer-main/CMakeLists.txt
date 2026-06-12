@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES native)
 find_package(CUDAToolkit)
 
+get_filename_component(TRANSFORMER_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 
 add_compile_options(-Wno-changes-meaning)
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
@@ -70,7 +71,7 @@ add_library(transformer_lib
         )
 
 target_link_libraries(transformer_lib PRIVATE CUDA::cudart CUDA::nvtx3)
-target_compile_definitions(transformer_lib PRIVATE TRANSFORMER_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")
+target_compile_definitions(transformer_lib PRIVATE TRANSFORMER_REPO_ROOT="${TRANSFORMER_REPO_ROOT}")
 
 add_executable(transformer
         src/vendor/argparse.hpp
@@ -93,14 +94,18 @@ execute_process(
 if (NOT TRANSFORMER_GIT_COMMIT)
     set(TRANSFORMER_GIT_COMMIT "unknown")
 endif ()
-target_compile_definitions(qwen35_forward_bench PRIVATE TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}")
+target_compile_definitions(qwen35_forward_bench PRIVATE
+        TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}"
+        TRANSFORMER_REPO_ROOT="${TRANSFORMER_REPO_ROOT}")
 
 add_executable(qwen35_module_bench
         src/vendor/argparse.hpp
         src/bench/qwen35_module_bench.cu
 )
 target_link_libraries(qwen35_module_bench PRIVATE transformer_lib CUDA::nvtx3)
-target_compile_definitions(qwen35_module_bench PRIVATE TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}")
+target_compile_definitions(qwen35_module_bench PRIVATE
+        TRANSFORMER_GIT_COMMIT="${TRANSFORMER_GIT_COMMIT}"
+        TRANSFORMER_REPO_ROOT="${TRANSFORMER_REPO_ROOT}")
 
 # tests
 enable_testing()

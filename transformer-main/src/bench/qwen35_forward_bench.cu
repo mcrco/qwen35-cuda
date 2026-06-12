@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -23,6 +24,10 @@
 
 #ifndef TRANSFORMER_GIT_COMMIT
 #define TRANSFORMER_GIT_COMMIT "unknown"
+#endif
+
+#ifndef TRANSFORMER_REPO_ROOT
+#define TRANSFORMER_REPO_ROOT "."
 #endif
 
 namespace {
@@ -68,13 +73,21 @@ std::string current_timestamp() {
     return out.str();
 }
 
-std::filesystem::path json_path_with_git_commit(const std::string &json_path) {
+std::filesystem::path json_output_dir(const std::string &json_path) {
     std::filesystem::path path(json_path);
-    std::filesystem::path parent = path.parent_path();
-    std::string stem = path.stem().string();
-    std::string extension = path.extension().string();
-    std::string filename = stem + "-" + TRANSFORMER_GIT_COMMIT + extension;
-    return parent / filename;
+    if (path.has_extension()) {
+        return path.parent_path();
+    }
+    return path;
+}
+
+std::string short_git_commit() {
+    std::string commit = TRANSFORMER_GIT_COMMIT;
+    return commit.substr(0, std::min<size_t>(commit.size(), 12));
+}
+
+std::filesystem::path json_output_path(const BenchArgs &args) {
+    return json_output_dir(args.json_path) / ("forward-" + short_git_commit() + ".json");
 }
 
 void validate_args(const BenchArgs &args) {
@@ -297,8 +310,8 @@ int main(int argc, const char *argv[]) {
         .help("Inline prompt text for --prefill")
         .default_value(std::string(""));
     program.add_argument("--json")
-        .help("Output JSON file path; stdout when omitted")
-        .default_value(std::string(""));
+        .help("Output JSON directory")
+        .default_value(std::string(TRANSFORMER_REPO_ROOT) + "/bench-results");
     program.add_argument("--label")
         .help("Optional run label included in JSON output")
         .default_value(std::string(""));
@@ -329,7 +342,7 @@ int main(int argc, const char *argv[]) {
         if (args.json_path.empty()) {
             std::cout << output.dump(2) << std::endl;
         } else {
-            std::filesystem::path output_path = json_path_with_git_commit(args.json_path);
+            std::filesystem::path output_path = json_output_path(args);
             if (output_path.has_parent_path()) {
                 std::filesystem::create_directories(output_path.parent_path());
             }
