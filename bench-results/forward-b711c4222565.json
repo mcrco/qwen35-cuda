@@ -1,0 +1,35 @@
+{
+  "config": {
+    "input_token": 64,
+    "max_seq_len": 1024,
+    "measure_tokens": 128,
+    "prefill_enabled": false,
+    "prefill_tokens": 0,
+    "seed": 0,
+    "temperature": 1.0,
+    "warmup_tokens": 32
+  },
+  "git": {
+    "commit": "b711c422256523c775bdab37b7f38b25ee69507a"
+  },
+  "label": "",
+  "model": {
+    "dtype": {
+      "compute": "fp32",
+      "hidden": "fp32",
+      "weight": "fp32"
+    },
+    "name": "qwen35",
+    "size": "0.8B"
+  },
+  "result": {
+    "end_seq_len": 160,
+    "gpu_total_us": 4973422.5,
+    "gpu_us_per_token": 38854.86328125,
+    "start_seq_len": 32,
+    "tokens_per_sec": 25.736871379218808,
+    "wall_total_us": 4973409.476,
+    "wall_us_per_token": 38854.76153125
+  },
+  "timestamp": "2026-06-12T04:23:12-0700"
+}
