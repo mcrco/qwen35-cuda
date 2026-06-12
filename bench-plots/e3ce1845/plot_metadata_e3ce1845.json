@@ -1,0 +1,13 @@
+{
+  "identity": "e3ce1845",
+  "commits": [
+    "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+  ],
+  "input_files": [
+    "bench-results/module-all-e3ce18459048.json"
+  ],
+  "artifacts": [
+    "bench-plots/e3ce1845/gpu_time_e3ce1845.png",
+    "bench-plots/e3ce1845/speedup_e3ce1845.png"
+  ]
+}

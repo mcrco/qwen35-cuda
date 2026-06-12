@@ -1,0 +1,311 @@
+[
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "matvec",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "k": 2560,
+        "m": 9216
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 238831.473,
+      "cpu_us_per_iter": 79610.491,
+      "gpu_total_us": 28579.551696777344,
+      "gpu_us_per_iter": 285.79551696777344,
+      "speedup_cpu_over_gpu": 278.5575219816235
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "zero_centered_rms_norm",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "n": 2560
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 75.783,
+      "cpu_us_per_iter": 25.261,
+      "gpu_total_us": 982.1760058403015,
+      "gpu_us_per_iter": 9.821760058403015,
+      "speedup_cpu_over_gpu": 2.571942284253618
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "gated_rms_norm",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "cols": 256,
+        "rows": 16
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 270.77,
+      "cpu_us_per_iter": 90.25666666666666,
+      "gpu_total_us": 393.21601390838623,
+      "gpu_us_per_iter": 3.9321601390838623,
+      "speedup_cpu_over_gpu": 22.95345649063397
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "l2_norm_rows",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "cols": 256,
+        "rows": 16
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 58.471,
+      "cpu_us_per_iter": 19.490333333333332,
+      "gpu_total_us": 329.3440043926239,
+      "gpu_us_per_iter": 3.293440043926239,
+      "speedup_cpu_over_gpu": 5.917925656268556
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "silu_mult",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "n": 9216
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 471.659,
+      "cpu_us_per_iter": 157.21966666666665,
+      "gpu_total_us": 255.74401021003723,
+      "gpu_us_per_iter": 2.5574401021003723,
+      "speedup_cpu_over_gpu": 61.47540524509075
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "rope",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "head_size": 256,
+        "num_kv_heads": 4,
+        "num_query_heads": 16,
+        "position": 127,
+        "rotary_dim": 64
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 129.263,
+      "cpu_us_per_iter": 43.08766666666667,
+      "gpu_total_us": 495.61598896980286,
+      "gpu_us_per_iter": 4.956159889698029,
+      "speedup_cpu_over_gpu": 8.693760416452573
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "argmax",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "n": 248320
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 1467.362,
+      "cpu_us_per_iter": 489.1206666666667,
+      "gpu_total_us": 2080.76810836792,
+      "gpu_us_per_iter": 20.8076810836792,
+      "speedup_cpu_over_gpu": 23.50673603173952
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "sampling",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "n": 248320,
+        "temperature": 1.0
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 8161.647,
+      "cpu_us_per_iter": 2720.549,
+      "gpu_total_us": 3353.6319732666016,
+      "gpu_us_per_iter": 33.536319732666016,
+      "speedup_cpu_over_gpu": 81.12246727389268
+    },
+    "timestamp": "2026-06-12T02:31:26-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "gqa_sdpa",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "head_size": 256,
+        "layer_num": 0,
+        "num_kv_heads": 4,
+        "num_layers": 32,
+        "num_query_heads": 16,
+        "seq_len": 128
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 12706.045,
+      "cpu_us_per_iter": 4235.348333333333,
+      "gpu_total_us": 2844.383955001831,
+      "gpu_us_per_iter": 28.44383955001831,
+      "speedup_cpu_over_gpu": 148.90213136962402
+    },
+    "timestamp": "2026-06-12T02:31:27-0700"
+  },
+  {
+    "benchmark": {
+      "dtype": "fp32",
+      "module": "linear_attention",
+      "name": "qwen35_module_bench",
+      "preset": "qwen35-4b"
+    },
+    "config": {
+      "cpu_iters": 3,
+      "gpu_iters": 100,
+      "seed": 0,
+      "shapes": {
+        "conv_kernel_dim": 4,
+        "conv_size": 8192,
+        "key_head_dim": 128,
+        "num_key_heads": 16,
+        "num_value_heads": 32,
+        "recurrent_state_size": 524288,
+        "value_head_dim": 128
+      },
+      "warmup_iters": 10
+    },
+    "git": {
+      "commit": "e3ce1845904876cdc13d79fd6de59c83c69722ee"
+    },
+    "label": "",
+    "result": {
+      "cpu_total_us": 18002.038,
+      "cpu_us_per_iter": 6000.6793333333335,
+      "gpu_total_us": 9710.368156433105,
+      "gpu_us_per_iter": 97.10368156433105,
+      "speedup_cpu_over_gpu": 61.79662023790408
+    },
+    "timestamp": "2026-06-12T02:31:27-0700"
+  }
+]
