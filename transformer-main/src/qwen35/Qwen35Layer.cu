@@ -84,8 +84,6 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qw
                                            const std::shared_ptr<CudaBuffer>
                                                &hidden_state,
                                            cudaStream_t stream) {
-  checkCuda(cudaStreamSynchronize(stream));
-
   size_t seq_len = cache.seq_len;
 
   //
@@ -106,7 +104,6 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qw
       static_cast<weight_t *>(q_proj_weight->data),
       q_proj_bias ? static_cast<weight_t *>(q_proj_bias->data) : nullptr,
       norm_hidden, q_proj_out, stream);
-  checkCuda(cudaStreamSynchronize(stream));
 
   auto query_ptr = static_cast<hidden_t *>(queries->data);
   auto gate_ptr = static_cast<hidden_t *>(gate->data);
@@ -123,7 +120,6 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qw
         gate_ptr + h * Qwen35Config<QWEN35_SIZE>::head_size(),
         Qwen35Config<QWEN35_SIZE>::head_size(), stream);
   }
-  checkCuda(cudaStreamSynchronize(stream));
 
   auto keys_cache = static_cast<hidden_t *>(cache.keys->data);
   auto values_cache = static_cast<hidden_t *>(cache.values->data);
@@ -149,7 +145,6 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qw
       static_cast<weight_t *>(v_proj_weight->data),
       v_proj_bias ? static_cast<weight_t *>(v_proj_bias->data) : nullptr,
       norm_hidden, new_values, stream);
-  checkCuda(cudaStreamSynchronize(stream));
 
   for (size_t h = 0; h < Qwen35Config<QWEN35_SIZE>::num_kv_heads(); h++) {
     k_norm.template zero_centered_rms_norm<hidden_t, weight_t,
@@ -159,7 +154,6 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qw
         Qwen35Config<QWEN35_SIZE>::head_size(),
         Qwen35Config<QWEN35_SIZE>::rms_norm_eps(), stream);
   }
-  checkCuda(cudaStreamSynchronize(stream));
 
   RoPE::apply_rope_to_qk<hidden_t, compute_t>(
       query_ptr, Qwen35Config<QWEN35_SIZE>::num_query_heads(),
@@ -189,7 +183,6 @@ void Qwen35FullAttnLayer<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qw
   qwen35_layer_detail::residual_add<hidden_t, hidden_t, compute_t>(
       hidden, static_cast<hidden_t *>(attention_proj->data),
       Qwen35Config<QWEN35_SIZE>::hidden_size(), stream);
-  checkCuda(cudaStreamSynchronize(stream));
   apply_mlp(hidden_state, stream);
 }
 
@@ -225,7 +218,6 @@ void Qwen35LinearAttentionLayer<
     QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qwen35Cache &cache,
                       const std::shared_ptr<CudaBuffer> &hidden_state,
                       cudaStream_t stream) {
-  checkCuda(cudaStreamSynchronize(stream));
   auto hidden = static_cast<hidden_t *>(hidden_state->data);
   auto norm_hidden = static_cast<hidden_t *>(norm_hidden_state->data);
   input_layernorm
@@ -263,7 +255,6 @@ void Qwen35LinearAttentionLayer<
       Qwen35Config<QWEN35_SIZE>::hidden_size(),
       static_cast<weight_t *>(in_proj_a_weight->data), nullptr, norm_hidden,
       decay_raw_ptr, stream);
-  checkCuda(cudaStreamSynchronize(stream));
 
   auto conv_state = static_cast<hidden_t *>(cache.conv_states->data) +
                     layer_num *
@@ -281,7 +272,6 @@ void Qwen35LinearAttentionLayer<
   LinearAttention::normalize_mixed_qk<hidden_t, compute_t>(
       mixed, Qwen35Config<QWEN35_SIZE>::linear_num_key_heads(),
       Qwen35Config<QWEN35_SIZE>::linear_key_head_dim(), stream);
-  checkCuda(cudaStreamSynchronize(stream));
 
   auto state = static_cast<hidden_t *>(cache.recurrent_states->data) +
                layer_num * Qwen35Config<QWEN35_SIZE>::linear_num_value_heads() *
@@ -315,7 +305,6 @@ void Qwen35LinearAttentionLayer<
   qwen35_layer_detail::residual_add<hidden_t, hidden_t, compute_t>(
       hidden, static_cast<hidden_t *>(attention_proj->data),
       Qwen35Config<QWEN35_SIZE>::hidden_size(), stream);
-  checkCuda(cudaStreamSynchronize(stream));
   apply_mlp(hidden_state, stream);
 }
 

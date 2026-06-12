@@ -23,7 +23,7 @@ public:
     std::shared_ptr<CudaBuffer> load_tensor_slice_rows(const std::string &name, size_t row_start, size_t rows, size_t cols) const;
 
 private:
-    std::map<std::string, std::filesystem::path> tensor_to_file;
+    std::map<std::string, std::shared_ptr<safetensors::safetensors_t>> tensor_to_file;
 };
 
 class Qwen35Loader {

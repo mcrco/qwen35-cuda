@@ -53,13 +53,11 @@ int32_t Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qwen35C
     auto embedding = static_cast<weight_t *>(embedding_weight->data);
     auto hidden = static_cast<hidden_t *>(hidden_state->data);
     qwen35_layer_detail::convert_copy<weight_t, hidden_t, compute_t>(embedding + static_cast<size_t>(input_tok_id) * Qwen35Config<QWEN35_SIZE>::hidden_size(), hidden, Qwen35Config<QWEN35_SIZE>::hidden_size(), stream);
-    checkCuda(cudaStreamSynchronize(stream));
 
     for (auto &layer : layers) {
         layer->forward(cache, hidden_state, stream);
     }
 
-    checkCuda(cudaStreamSynchronize(stream));
     auto norm_hidden = static_cast<hidden_t *>(norm_hidden_state->data);
     final_layernorm
         .template zero_centered_rms_norm<hidden_t, weight_t, hidden_t,

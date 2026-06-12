@@ -6,6 +6,7 @@
 
 #include <cuda_bf16.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -24,19 +25,19 @@ Qwen35TensorIndex::Qwen35TensorIndex(const std::string &model_dir) {
         }
 
         std::string warn, err;
-        safetensors::safetensors_t st;
-        bool ret = safetensors::mmap_from_file(entry.path().string(), &st, &warn, &err);
+        auto st = std::make_shared<safetensors::safetensors_t>();
+        bool ret = safetensors::mmap_from_file(entry.path().string(), st.get(), &warn, &err);
         if (!warn.empty()) {
             std::cerr << "safetensors warning: " << warn << std::endl;
         }
         if (!ret) {
             throw std::runtime_error("safetensors error while indexing " + entry.path().string() + ": " + err);
         }
-        if (!safetensors::validate_data_offsets(st, err)) {
+        if (!safetensors::validate_data_offsets(*st, err)) {
             throw std::runtime_error("safetensors invalid data offsets in " + entry.path().string() + ": " + err);
         }
-        for (size_t i = 0; i < st.tensors.size(); i++) {
-            tensor_to_file[st.tensors.keys()[i]] = entry.path();
+        for (size_t i = 0; i < st->tensors.size(); i++) {
+            tensor_to_file[st->tensors.keys()[i]] = st;
         }
     }
     if (tensor_to_file.empty()) {
@@ -71,18 +72,30 @@ static float load_tensor_float_value(const uint8_t *data, safetensors::dtype dty
 }
 
 template<typename storage_t>
+static void copy_tensor_values_to_cuda(void *dst, const uint8_t *src, safetensors::dtype dtype, size_t start, size_t count) {
+    constexpr size_t chunk_els = 1 << 20;
+    std::vector<storage_t> host_values;
+    host_values.reserve(std::min(chunk_els, count));
+
+    auto *dst_values = static_cast<storage_t *>(dst);
+    for (size_t offset = 0; offset < count; offset += chunk_els) {
+        size_t chunk_count = std::min(chunk_els, count - offset);
+        host_values.resize(chunk_count);
+        for (size_t i = 0; i < chunk_count; i++) {
+            host_values[i] = gpu_ops::write_from<storage_t>(load_tensor_float_value(src, dtype, start + offset + i));
+        }
+        checkCuda(cudaMemcpy(dst_values + offset, host_values.data(), chunk_count * sizeof(storage_t), cudaMemcpyHostToDevice));
+    }
+}
+
+template<typename storage_t>
 std::shared_ptr<CudaBuffer> Qwen35TensorIndex::load_tensor(const std::string &name, size_t expected_dim_0, size_t expected_dim_1, size_t expected_dim_2) const {
     auto it = tensor_to_file.find(name);
     if (it == tensor_to_file.end()) {
         throw std::runtime_error("failed to find tensor: " + name);
     }
 
-    std::string warn, err;
-    safetensors::safetensors_t st;
-    bool ret = safetensors::mmap_from_file(it->second.string(), &st, &warn, &err);
-    if (!ret) {
-        throw std::runtime_error("safetensors error while loading " + name + ": " + err);
-    }
+    auto &st = *it->second;
     auto tensor = find_tensor(st, name);
     if (tensor.dtype != safetensors::kBFLOAT16 && tensor.dtype != safetensors::kFLOAT32) {
         throw std::runtime_error("unexpected dtype for " + name + ", only BF16 and F32 checkpoint tensors are supported");
@@ -103,19 +116,33 @@ std::shared_ptr<CudaBuffer> Qwen35TensorIndex::load_tensor(const std::string &na
     size_t len_bytes = num_els * sizeof(storage_t);
     auto out = std::make_shared<CudaBuffer>(len_bytes);
     const uint8_t *tensor_data_host = st.databuffer_addr + tensor.data_offsets[0];
-    auto out_ptr = static_cast<storage_t *>(out->data);
-    for (size_t i = 0; i < num_els; i++) {
-        out_ptr[i] = gpu_ops::write_from<storage_t>(load_tensor_float_value(tensor_data_host, tensor.dtype, i));
-    }
+    copy_tensor_values_to_cuda<storage_t>(out->data, tensor_data_host, tensor.dtype, 0, num_els);
     return out;
 }
 
 template<typename storage_t>
 std::shared_ptr<CudaBuffer> Qwen35TensorIndex::load_tensor_slice_rows(const std::string &name, size_t row_start, size_t rows, size_t cols) const {
-    auto full = load_tensor<storage_t>(name, 0, cols);
+    auto it = tensor_to_file.find(name);
+    if (it == tensor_to_file.end()) {
+        throw std::runtime_error("failed to find tensor: " + name);
+    }
+
+    auto &st = *it->second;
+    auto tensor = find_tensor(st, name);
+    if (tensor.dtype != safetensors::kBFLOAT16 && tensor.dtype != safetensors::kFLOAT32) {
+        throw std::runtime_error("unexpected dtype for " + name + ", only BF16 and F32 checkpoint tensors are supported");
+    }
+    if (tensor.shape.size() < 2 || tensor.shape[1] != cols || row_start + rows > tensor.shape[0]) {
+        throw std::runtime_error("unexpected tensor shape for " + name);
+    }
+
     auto out = std::make_shared<CudaBuffer>(rows * cols * sizeof(storage_t));
-    auto full_ptr = static_cast<storage_t *>(full->data);
-    std::memcpy(out->data, full_ptr + row_start * cols, rows * cols * sizeof(storage_t));
+    const uint8_t *tensor_data_host = st.databuffer_addr + tensor.data_offsets[0];
+    for (size_t row = 0; row < rows; row++) {
+        size_t src_row = row_start + row;
+        auto *dst_row = static_cast<storage_t *>(out->data) + row * cols;
+        copy_tensor_values_to_cuda<storage_t>(dst_row, tensor_data_host, tensor.dtype, src_row * cols, cols);
+    }
     return out;
 }
 
