@@ -1,14 +1,15 @@
-# pyref
+# Python reference implementation
 
 PyTorch reference implementation of the transformer model.
 
-## Running
-On the cs179 server, run:
+## Setup
+
+From the repository root:
 
 ```bash
-micromamba activate /cs179/transformer_env
-python main.py
+uv sync
+uv run python pyref/main.py
 ```
 
-## Setup
-Tested with Python 3.13.3, Torch 2.7.0, safetensors 0.5.3, transformers 4.51.3
+Dependencies are declared in the root `pyproject.toml`. The PyTorch wheel uses
+CUDA 11.8 for compatibility with Pascal (`sm_61`) GPUs.

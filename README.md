@@ -13,15 +13,13 @@ cmake --build build -j
 ## Install Python Reference Environment
 
 ```bash
-cd pyref
-uv venv --python 3.13
-uv pip install torch==2.7.0 safetensors==0.5.3 transformers==4.51.3
+uv sync
 ```
 
 Run the reference implementation with:
 
 ```bash
-uv run python main.py --model-dir ../models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
+uv run python pyref/main.py --model-dir models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
 ```
 
 ## Install Plotting Environment
@@ -125,8 +123,7 @@ TRANSFORMER_MODEL_DIR=../models/Qwen3.5-0.8B ./transformer --interactive --max-s
 Run the Python reference on the same checkpoint:
 
 ```bash
-cd pyref
-uv run python main.py --model-dir ../models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
+uv run python pyref/main.py --model-dir models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
 ```
 
 The deterministic CUDA path and Python reference should be compared on the same
