@@ -4,9 +4,9 @@ version = "0.1.0"
 description = "Python reference implementation for the Qwen3.5 CUDA project"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "safetensors==0.5.3",
+    "safetensors==0.8.0",
     "torch==2.7.0",
-    "transformers==4.51.3",
+    "transformers==5.13.0",
 ]
 
 [tool.uv]
