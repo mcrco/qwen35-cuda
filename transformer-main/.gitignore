@@ -1,8 +1,0 @@
-.idea
-.vscode
-.ipynb_checkpoints
-__pycache__
-cmake-build-*
-/build
-/compile_commands.json
-.cache

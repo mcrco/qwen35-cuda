@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES native)
 find_package(CUDAToolkit)
 
-get_filename_component(TRANSFORMER_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+set(TRANSFORMER_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_compile_options(-Wno-changes-meaning)
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)

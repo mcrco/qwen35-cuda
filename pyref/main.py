@@ -9,7 +9,7 @@ from qwen35 import Qwen35Model
 
 
 DEFAULT_MODEL_ID = "Qwen/Qwen3.5-4B"
-DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[2] / "models/Qwen3.5-4B"
+DEFAULT_MODEL_DIR = Path(__file__).resolve().parent.parent / "models/Qwen3.5-4B"
 
 
 def resolve_model_dir(model_dir_arg: str | None) -> Path:

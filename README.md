@@ -6,7 +6,6 @@ Qwen3.5 autoregressive inference.
 ## Build CUDA Code
 
 ```bash
-cd transformer-main
 cmake -S . -B build
 cmake --build build -j
 ```
@@ -14,7 +13,7 @@ cmake --build build -j
 ## Install Python Reference Environment
 
 ```bash
-cd transformer-main/pyref
+cd pyref
 uv venv --python 3.13
 uv pip install torch==2.7.0 safetensors==0.5.3 transformers==4.51.3
 ```
@@ -22,7 +21,7 @@ uv pip install torch==2.7.0 safetensors==0.5.3 transformers==4.51.3
 Run the reference implementation with:
 
 ```bash
-uv run python main.py --model-dir ../../models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
+uv run python main.py --model-dir ../models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
 ```
 
 ## Install Plotting Environment
@@ -105,29 +104,29 @@ Including the above two, my new implementation includes:
 Run all test cases:
 
 ```bash
-cd transformer-main/build
+cd build
 ctest --output-on-failure
 ```
 
 Run the CUDA executable:
 
 ```bash
-cd transformer-main/build
-TRANSFORMER_MODEL_DIR=../../models/Qwen3.5-0.8B ./transformer --max-seq-len 100
+cd build
+TRANSFORMER_MODEL_DIR=../models/Qwen3.5-0.8B ./transformer --max-seq-len 100
 ```
 
 Run the interactive chat interface:
 
 ```bash
-cd transformer-main/build
-TRANSFORMER_MODEL_DIR=../../models/Qwen3.5-0.8B ./transformer --interactive --max-seq-len 10000
+cd build
+TRANSFORMER_MODEL_DIR=../models/Qwen3.5-0.8B ./transformer --interactive --max-seq-len 10000
 ```
 
 Run the Python reference on the same checkpoint:
 
 ```bash
-cd transformer-main/pyref
-uv run python main.py --model-dir ../../models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
+cd pyref
+uv run python main.py --model-dir ../models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
 ```
 
 The deterministic CUDA path and Python reference should be compared on the same
@@ -145,9 +144,8 @@ Benchmarks are run through `bench-module.sh`, which records the current git
 commit in each result file:
 
 ```bash
-cd transformer-main
 cmake --build build -j
-../bench-module.sh --module all --preset qwen35-4b --json ../bench-results
+./bench-module.sh --module all --preset qwen35-4b --json bench-results
 ```
 
 The benchmark JSON files are in `bench-results/`. The plot directories in

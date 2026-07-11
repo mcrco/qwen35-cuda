@@ -1,4 +1,12 @@
 models/
 
-**/__pycache__
-.venv
+**/__pycache__/
+.venv/
+.idea/
+.vscode/
+.ipynb_checkpoints/
+cmake-build-*/
+/build/
+/compile_commands.json
+.cache/
+Testing/
