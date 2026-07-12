@@ -210,6 +210,11 @@ nlohmann::json make_json(const BenchArgs &args, const BenchResult &result) {
     return {
         {"timestamp", current_timestamp()},
         {"label", args.label},
+        {"benchmark", {
+            {"name", "qwen35_forward_bench"},
+            {"module", "custom_cuda"},
+            {"implementation", "custom_cuda"},
+        }},
         {"git", {
             {"commit", args.git_commit},
         }},

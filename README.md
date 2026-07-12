@@ -145,6 +145,23 @@ cmake --build build -j
 ./bench-module.sh --module all --preset qwen35-4b --json bench-results
 ```
 
+Compare end-to-end autoregressive decoding speed for the PyTorch reference on
+CPU and the custom CUDA implementation with identical benchmark settings:
+
+```bash
+cmake --build build -j
+TRANSFORMER_MODEL_DIR="$PWD/models/Qwen3.5-0.8B" \
+  ./bench-forward.sh --dtype fp32 --temperature 0 --warmup-tokens 8 \
+  --measure-tokens 32 --json bench-results
+uv run python plots/plot_benchmarks.py --results-dir bench-results \
+  --out-dir bench-plots --replot-all
+```
+
+This produces separate JSON results plus a `python_vs_cuda` latency plot. The
+comparison includes framework overhead and different hardware paths: the
+reference uses PyTorch CPU operations, while the other implementation uses the
+project's custom CUDA kernels.
+
 The benchmark JSON files are in `bench-results/`. The plot directories in
 `bench-plots/` are named by git commit. The latest checked-in benchmark is:
 

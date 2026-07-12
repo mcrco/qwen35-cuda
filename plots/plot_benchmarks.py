@@ -42,9 +42,11 @@ def flatten_result(data: dict[str, Any], path: Path) -> dict[str, Any]:
         "git_short": str(git.get("commit", ""))[:8],
         "benchmark": name,
         "module": module,
+        "implementation": benchmark.get("implementation") or module,
         "preset": preset,
         "dtype": dtype,
         "gpu_us": result.get("gpu_us_per_iter", result.get("gpu_us_per_token")),
+        "wall_us": result.get("wall_us_per_token"),
         "cpu_us": result.get("cpu_us_per_iter"),
         "speedup": result.get("speedup_cpu_over_gpu"),
         "tokens_per_sec": result.get("tokens_per_sec"),
@@ -100,6 +102,7 @@ def load_results(results_dir: Path, processed_input_files: set[str] | None = Non
 
     numeric_cols = [
         "gpu_us",
+        "wall_us",
         "cpu_us",
         "speedup",
         "tokens_per_sec",
@@ -276,6 +279,17 @@ def generate_outputs(df: pd.DataFrame, out_dir: Path, axis_limits: dict[str, tup
             value_suffix="x",
         ),
         save_barplot(df, y="tokens_per_sec", title="Forward tokens/sec", filename="tokens_per_sec.png", out_dir=out_dir),
+        save_barplot(
+            df[df["module"].isin(["custom_cuda", "python_reference"])],
+            y="wall_us",
+            title="Python reference vs custom CUDA latency",
+            filename="python_vs_cuda.png",
+            out_dir=out_dir,
+            log_scale=True,
+            xlim=axis_limits.get("wall_us"),
+            show_value_labels=True,
+            value_suffix=" us/token",
+        ),
     ]:
         if maybe_path is not None:
             paths.append(maybe_path)
@@ -318,7 +332,7 @@ def main() -> int:
         print(f"No benchmark JSON files found in {args.results_dir}")
         return 1
 
-    axis_limits = log_axis_limits(all_df, ["gpu_us", "speedup"])
+    axis_limits = log_axis_limits(all_df, ["gpu_us", "speedup", "wall_us"])
     paths = generate_outputs_by_commit(df, args.out_dir, axis_limits)
     print(df.to_string(index=False))
     print()
