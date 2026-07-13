@@ -10,11 +10,14 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-## Install Python Reference Environment
+## Install Python Environment
 
 ```bash
 uv sync
 ```
+
+This installs the dependencies for both the Python reference implementation and
+the benchmark plotting tools.
 
 Run the reference implementation with:
 
@@ -22,18 +25,10 @@ Run the reference implementation with:
 uv run python pyref/main.py --model-dir models/Qwen3.5-0.8B --prompt a --max-new-tokens 100 --dtype float32
 ```
 
-## Install Plotting Environment
-
-```bash
-cd plots
-uv venv --python 3.13
-uv pip install -r requirements.txt
-```
-
 Regenerate benchmark plots with:
 
 ```bash
-uv run python plot_benchmarks.py --results-dir ../bench-results --out-dir ../bench-plots --replot-all
+uv run python plots/plot_benchmarks.py --results-dir bench-results --out-dir bench-plots --replot-all
 ```
 
 ## Install Model Files
