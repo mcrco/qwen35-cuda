@@ -145,22 +145,30 @@ cmake --build build -j
 ./bench-module.sh --module all --preset qwen35-4b --json bench-results
 ```
 
-Compare end-to-end autoregressive decoding speed for the PyTorch reference on
-CPU and the custom CUDA implementation with identical benchmark settings:
+Compare the custom CUDA implementation against the fastest Hugging Face CUDA
+path supported by the current GPU. Volta and newer GPUs use a static cache with
+`torch.compile`/Inductor. Older GPUs such as Pascal automatically use eager CUDA
+with the default dynamic cache because Triton requires compute capability 7.0
+or newer. Lazy initialization and any compilation/autotuning occur during an
+unmeasured warmup generation:
 
 ```bash
 cmake --build build -j
 TRANSFORMER_MODEL_DIR="$PWD/models/Qwen3.5-0.8B" \
   ./bench-forward.sh --dtype fp32 --temperature 0 --warmup-tokens 8 \
-  --measure-tokens 32 --json bench-results
+  --measure-tokens 32 --max-seq-len 128 --json bench-results
 uv run python plots/plot_benchmarks.py --results-dir bench-results \
   --out-dir bench-plots --replot-all
 ```
 
-This produces separate JSON results plus a `python_vs_cuda` latency plot. The
-comparison includes framework overhead and different hardware paths: the
-reference uses PyTorch CPU operations, while the other implementation uses the
-project's custom CUDA kernels.
+This produces separate JSON results and a `huggingface_vs_cuda` decode-latency
+plot. Hugging Face also reports batched prefill throughput and time to first
+token. The custom implementation currently processes its prompt serially, so
+its prefill result will be added once a true batched prefill path exists.
+
+The handwritten PyTorch code under `pyref/` remains a deliberately direct,
+naive reference for understanding and checking the Qwen3.5 architecture. It is
+not used as the performance baseline.
 
 The benchmark JSON files are in `bench-results/`. The plot directories in
 `bench-plots/` are named by git commit. The latest checked-in benchmark is:

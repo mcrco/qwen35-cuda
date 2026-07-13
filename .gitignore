@@ -1,4 +1,6 @@
 models/
+bench-results/
+bench-plots/
 
 **/__pycache__/
 .venv/
