@@ -267,8 +267,10 @@ std::shared_ptr<Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>> Qwen35L
 }
 
 template void Qwen35Loader::validate_config<QWEN35_0_8B>(const nlohmann::json &cfg);
+template void Qwen35Loader::validate_config<QWEN35_2B>(const nlohmann::json &cfg);
 template void Qwen35Loader::validate_config<QWEN35_4B>(const nlohmann::json &cfg);
 template void Qwen35Loader::validate_config<QWEN35_9B>(const nlohmann::json &cfg);
 template std::shared_ptr<Qwen35Model<QWEN35_0_8B, float, float, float>> Qwen35Loader::load_qwen35<QWEN35_0_8B, float, float, float>(const std::string &model_dir);
+template std::shared_ptr<Qwen35Model<QWEN35_2B, float, float, float>> Qwen35Loader::load_qwen35<QWEN35_2B, float, float, float>(const std::string &model_dir);
 template std::shared_ptr<Qwen35Model<QWEN35_4B, float, float, float>> Qwen35Loader::load_qwen35<QWEN35_4B, float, float, float>(const std::string &model_dir);
 template std::shared_ptr<Qwen35Model<QWEN35_9B, float, float, float>> Qwen35Loader::load_qwen35<QWEN35_9B, float, float, float>(const std::string &model_dir);

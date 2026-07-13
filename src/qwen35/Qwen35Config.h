@@ -5,6 +5,7 @@
 
 enum Qwen35Size {
     QWEN35_0_8B,
+    QWEN35_2B,
     QWEN35_4B,
     QWEN35_9B,
 };
@@ -13,6 +14,7 @@ template<Qwen35Size size>
 struct Qwen35Config {
     static constexpr size_t hidden_size() {
         if constexpr (size == QWEN35_0_8B) return 1024;
+        if constexpr (size == QWEN35_2B) return 2048;
         if constexpr (size == QWEN35_4B) return 2560;
         if constexpr (size == QWEN35_9B) return 4096;
         throw std::logic_error("Unknown Qwen3.5 size");
@@ -20,19 +22,21 @@ struct Qwen35Config {
 
     static constexpr size_t num_layers() {
         if constexpr (size == QWEN35_0_8B) return 24;
+        if constexpr (size == QWEN35_2B) return 24;
         if constexpr (size == QWEN35_4B || size == QWEN35_9B) return 32;
         throw std::logic_error("Unknown Qwen3.5 size");
     }
 
     static constexpr size_t intermediate_size() {
         if constexpr (size == QWEN35_0_8B) return 3584;
+        if constexpr (size == QWEN35_2B) return 6144;
         if constexpr (size == QWEN35_4B) return 9216;
         if constexpr (size == QWEN35_9B) return 12288;
         throw std::logic_error("Unknown Qwen3.5 size");
     }
 
     static constexpr bool embedding_tying() {
-        if constexpr (size == QWEN35_0_8B || size == QWEN35_4B) return true;
+        if constexpr (size == QWEN35_0_8B || size == QWEN35_2B || size == QWEN35_4B) return true;
         if constexpr (size == QWEN35_9B) return false;
         throw std::logic_error("Unknown Qwen3.5 size");
     }
@@ -42,12 +46,12 @@ struct Qwen35Config {
     }
 
     static constexpr size_t num_query_heads() {
-        if constexpr (size == QWEN35_0_8B) return 8;
+        if constexpr (size == QWEN35_0_8B || size == QWEN35_2B) return 8;
         return 16;
     }
 
     static constexpr size_t num_kv_heads() {
-        if constexpr (size == QWEN35_0_8B) return 2;
+        if constexpr (size == QWEN35_0_8B || size == QWEN35_2B) return 2;
         return 4;
     }
 
@@ -68,7 +72,7 @@ struct Qwen35Config {
     }
 
     static constexpr size_t linear_num_value_heads() {
-        if constexpr (size == QWEN35_0_8B) return 16;
+        if constexpr (size == QWEN35_0_8B || size == QWEN35_2B) return 16;
         return 32;
     }
 

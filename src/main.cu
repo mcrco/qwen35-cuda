@@ -136,6 +136,9 @@ int main(int argc, const char *argv[])
     if (config["hidden_size"] == Qwen35Config<QWEN35_0_8B>::hidden_size() &&
         config["intermediate_size"] == Qwen35Config<QWEN35_0_8B>::intermediate_size()) {
         Qwen35MainRunner<QWEN35_0_8B>(program).run();
+    } else if (config["hidden_size"] == Qwen35Config<QWEN35_2B>::hidden_size() &&
+        config["intermediate_size"] == Qwen35Config<QWEN35_2B>::intermediate_size()) {
+        Qwen35MainRunner<QWEN35_2B>(program).run();
     } else if (config["hidden_size"] == Qwen35Config<QWEN35_4B>::hidden_size() &&
         config["intermediate_size"] == Qwen35Config<QWEN35_4B>::intermediate_size()) {
         Qwen35MainRunner<QWEN35_4B>(program).run();

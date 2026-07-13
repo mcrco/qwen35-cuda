@@ -262,6 +262,10 @@ BenchResult dispatch_bench(const BenchArgs &args) {
         config["intermediate_size"] == Qwen35Config<QWEN35_0_8B>::intermediate_size()) {
         return run_bench<QWEN35_0_8B>(args, "0.8B");
     }
+    if (config["hidden_size"] == Qwen35Config<QWEN35_2B>::hidden_size() &&
+        config["intermediate_size"] == Qwen35Config<QWEN35_2B>::intermediate_size()) {
+        return run_bench<QWEN35_2B>(args, "2B");
+    }
     if (config["hidden_size"] == Qwen35Config<QWEN35_4B>::hidden_size() &&
         config["intermediate_size"] == Qwen35Config<QWEN35_4B>::intermediate_size()) {
         return run_bench<QWEN35_4B>(args, "4B");

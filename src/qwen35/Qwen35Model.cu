@@ -88,5 +88,6 @@ int32_t Qwen35Model<QWEN35_SIZE, weight_t, hidden_t, compute_t>::forward(Qwen35C
 }
 
 template class Qwen35Model<QWEN35_0_8B, float, float, float>;
+template class Qwen35Model<QWEN35_2B, float, float, float>;
 template class Qwen35Model<QWEN35_4B, float, float, float>;
 template class Qwen35Model<QWEN35_9B, float, float, float>;

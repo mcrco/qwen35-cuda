@@ -38,6 +38,8 @@ public:
 
 extern template void GroupQueryAttention<QWEN35_0_8B>::sdpa<float, float, float, float, float, float>(
     const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);
+extern template void GroupQueryAttention<QWEN35_2B>::sdpa<float, float, float, float, float, float>(
+    const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);
 extern template void GroupQueryAttention<QWEN35_4B>::sdpa<float, float, float, float, float, float>(
     const float*, const float*, const float*, float*, const float*, int32_t, int32_t, cudaStream_t);
 extern template void GroupQueryAttention<QWEN35_9B>::sdpa<float, float, float, float, float, float>(

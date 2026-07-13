@@ -82,7 +82,7 @@ in an unnormalized CDF.
 
 Including the above two, my new implementation includes:
 
-- loading different Qwen3.5 model sizes, currently 0.8B, 4B, and 9B shapes, for
+- loading different Qwen3.5 model sizes, currently 0.8B, 2B, 4B, and 9B shapes, for
   both bf16 and float32 (although I didn't do explicit instantions for bf16
   since my RTX 2070 Super doesn't support it),
 - a Python reference implementation for Qwen3.5 pieces,

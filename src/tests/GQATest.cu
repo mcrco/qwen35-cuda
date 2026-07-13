@@ -97,6 +97,7 @@ void test_gqa(int32_t max_seq_len, int32_t token_pos, int32_t layer_num) {
 int main() {
     test_gqa<QWEN35_0_8B>(1000, 732, 5);
     test_gqa<QWEN35_0_8B>(1000, 0, 0);
+    test_gqa<QWEN35_2B>(100, 2, 23);
     test_gqa<QWEN35_4B>(100, 2, 23);
     test_gqa<QWEN35_9B>(100, 2, 31);
 }

@@ -156,6 +156,7 @@ Shape shape_for() {
 
 Shape shape_for_preset(const std::string &preset) {
     if (preset == "qwen35-0.8b") return shape_for<QWEN35_0_8B>();
+    if (preset == "qwen35-2b") return shape_for<QWEN35_2B>();
     if (preset == "qwen35-4b") return shape_for<QWEN35_4B>();
     if (preset == "qwen35-9b") return shape_for<QWEN35_9B>();
     throw std::runtime_error("unsupported --preset value: " + preset);
@@ -630,6 +631,7 @@ BenchOutput dispatch_one(const BenchArgs &args, const std::string &module) {
     if (module == "sampling") return bench_sampling(args, shape);
     if (module == "gqa_sdpa") {
         if (args.preset == "qwen35-0.8b") return bench_gqa<QWEN35_0_8B>(args, shape);
+        if (args.preset == "qwen35-2b") return bench_gqa<QWEN35_2B>(args, shape);
         if (args.preset == "qwen35-4b") return bench_gqa<QWEN35_4B>(args, shape);
         if (args.preset == "qwen35-9b") return bench_gqa<QWEN35_9B>(args, shape);
     }

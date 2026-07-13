@@ -309,11 +309,14 @@ void Qwen35LinearAttentionLayer<
 }
 
 template class Qwen35Layer<QWEN35_0_8B, float, float, float>;
+template class Qwen35Layer<QWEN35_2B, float, float, float>;
 template class Qwen35Layer<QWEN35_4B, float, float, float>;
 template class Qwen35Layer<QWEN35_9B, float, float, float>;
 template class Qwen35FullAttnLayer<QWEN35_0_8B, float, float, float>;
+template class Qwen35FullAttnLayer<QWEN35_2B, float, float, float>;
 template class Qwen35FullAttnLayer<QWEN35_4B, float, float, float>;
 template class Qwen35FullAttnLayer<QWEN35_9B, float, float, float>;
 template class Qwen35LinearAttentionLayer<QWEN35_0_8B, float, float, float>;
+template class Qwen35LinearAttentionLayer<QWEN35_2B, float, float, float>;
 template class Qwen35LinearAttentionLayer<QWEN35_4B, float, float, float>;
 template class Qwen35LinearAttentionLayer<QWEN35_9B, float, float, float>;
