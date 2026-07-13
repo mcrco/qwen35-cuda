@@ -89,7 +89,7 @@ def load_processed_input_files(out_dir: Path) -> set[str]:
 def load_results(results_dir: Path, processed_input_files: set[str] | None = None) -> pd.DataFrame:
     processed_input_files = processed_input_files or set()
     rows: list[dict[str, Any]] = []
-    for path in sorted(results_dir.glob("*.json")):
+    for path in sorted(results_dir.rglob("*.json")):
         if normalized_path(path) in processed_input_files:
             continue
         with path.open() as f:

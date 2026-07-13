@@ -7,7 +7,7 @@ import argparse
 import json
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
@@ -72,7 +72,8 @@ def output_path(json_arg: str, commit: str) -> Path | None:
         return None
     path = Path(json_arg)
     directory = path.parent if path.suffix else path
-    return directory / f"python-forward-{commit[:12]}.json"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return directory / commit[:8] / "forward" / "python_reference" / f"{timestamp}.json"
 
 
 def main() -> int:

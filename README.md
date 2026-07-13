@@ -161,10 +161,20 @@ uv run python plots/plot_benchmarks.py --results-dir bench-results \
   --out-dir bench-plots --replot-all
 ```
 
-This produces separate JSON results and a `huggingface_vs_cuda` decode-latency
-plot. Hugging Face also reports batched prefill throughput and time to first
-token. The custom implementation currently processes its prompt serially, so
-its prefill result will be added once a true batched prefill path exists.
+This produces immutable, per-run JSON results grouped by commit, benchmark, and
+implementation, plus a `huggingface_vs_cuda` decode-latency plot:
+
+```text
+bench-results/<commit>/forward/custom_cuda/<UTC timestamp>.json
+bench-results/<commit>/forward/huggingface_compiled/<UTC timestamp>.json
+```
+
+Model size, dtype, temperature, sequence length, and the other workload options
+remain structured fields in each JSON file so plots can filter or compare them
+independently. Hugging Face also reports batched prefill throughput and time to
+first token. The custom implementation currently processes its prompt
+serially, so its prefill result will be added once a true batched prefill path
+exists.
 
 The handwritten PyTorch code under `pyref/` remains a deliberately direct,
 naive reference for understanding and checking the Qwen3.5 architecture. It is

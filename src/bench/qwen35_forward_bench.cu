@@ -70,6 +70,17 @@ std::string current_timestamp() {
     return out.str();
 }
 
+std::string filename_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::tm utc_tm{};
+    gmtime_r(&now_time, &utc_tm);
+
+    std::ostringstream out;
+    out << std::put_time(&utc_tm, "%Y%m%d-%H%M%S");
+    return out.str();
+}
+
 std::filesystem::path json_output_dir(const std::string &json_path) {
     std::filesystem::path path(json_path);
     if (path.has_extension()) {
@@ -80,11 +91,15 @@ std::filesystem::path json_output_dir(const std::string &json_path) {
 
 std::string short_git_commit(const BenchArgs &args) {
     std::string commit = args.git_commit;
-    return commit.substr(0, std::min<size_t>(commit.size(), 12));
+    return commit.substr(0, std::min<size_t>(commit.size(), 8));
 }
 
 std::filesystem::path json_output_path(const BenchArgs &args) {
-    return json_output_dir(args.json_path) / ("forward-" + short_git_commit(args) + ".json");
+    return json_output_dir(args.json_path)
+        / short_git_commit(args)
+        / "forward"
+        / "custom_cuda"
+        / (filename_timestamp() + ".json");
 }
 
 void validate_args(const BenchArgs &args) {

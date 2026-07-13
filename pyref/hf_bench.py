@@ -7,7 +7,7 @@ import argparse
 import json
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
@@ -68,7 +68,8 @@ def json_path(value: str, commit: str, execution: str) -> Path | None:
         return None
     path = Path(value)
     directory = path.parent if path.suffix else path
-    return directory / f"hf-{execution}-forward-{commit[:12]}.json"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return directory / commit[:8] / "forward" / f"huggingface_{execution}" / f"{timestamp}.json"
 
 
 class TokenEvents(StoppingCriteria):
