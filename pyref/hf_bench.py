@@ -12,9 +12,10 @@ from pathlib import Path
 
 import torch
 from transformers import (
-    AutoModelForImageTextToText,
+    AutoConfig,
     AutoTokenizer,
     CompileConfig,
+    Qwen3_5ForCausalLM,
     StoppingCriteria,
     StoppingCriteriaList,
 )
@@ -107,8 +108,13 @@ def main() -> int:
     dtype = parse_dtype(dtype_name)
     model_dir = resolve_model_dir(args.model_dir)
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer or model_dir)
-    model = AutoModelForImageTextToText.from_pretrained(
-        model_dir, dtype=dtype, local_files_only=True
+    full_config = AutoConfig.from_pretrained(model_dir, local_files_only=True)
+    model = Qwen3_5ForCausalLM.from_pretrained(
+        model_dir,
+        config=full_config.text_config,
+        dtype=dtype,
+        local_files_only=True,
+        key_mapping={r"^model\.language_model\.": "model."},
     ).eval().to("cuda")
     inputs = tokenizer(args.prompt, return_tensors="pt").to("cuda")
     prompt_tokens = int(inputs.input_ids.shape[1])
@@ -180,6 +186,7 @@ def main() -> int:
             "dtype": {"weight": dtype_name, "hidden": dtype_name, "compute": dtype_name},
         },
         "config": {
+            "text_only": True,
             "prompt_tokens": prompt_tokens,
             "warmup_tokens": args.warmup_tokens,
             "measure_tokens": args.measure_tokens,
